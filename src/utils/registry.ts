@@ -1,12 +1,12 @@
 import type { TokenProvider } from '../types'
 
 /**
- * Registry để quản lý các token provider
+ * Registry to manage token providers
  */
 const registry = new Map<string, TokenProvider>()
 
 /**
- * Đăng ký một token provider với tên
+ * Register a token provider with name
  */
 export function registerProvider(name: string, provider: TokenProvider): void {
   if (typeof name !== 'string' || !name.trim()) {
@@ -21,7 +21,7 @@ export function registerProvider(name: string, provider: TokenProvider): void {
 }
 
 /**
- * Lấy provider theo tên
+ * Get provider by name
  */
 export function getProvider(name: string): TokenProvider {
   const provider = registry.get(name)
@@ -32,28 +32,28 @@ export function getProvider(name: string): TokenProvider {
 }
 
 /**
- * Kiểm tra provider có tồn tại không
+ * Check if provider exists
  */
 export function hasProvider(name: string): boolean {
   return registry.has(name)
 }
 
 /**
- * Lấy danh sách tất cả provider names
+ * Get list of all provider names
  */
 export function listProviders(): string[] {
   return Array.from(registry.keys())
 }
 
 /**
- * Xóa provider
+ * Remove provider
  */
 export function unregisterProvider(name: string): boolean {
   return registry.delete(name)
 }
 
 /**
- * Xóa tất cả providers
+ * Remove all providers
  */
 export function clearProviders(): void {
   registry.clear()

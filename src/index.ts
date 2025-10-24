@@ -4,6 +4,7 @@ export type {
   FetchGuardOptions,
   FetchGuardRequestInit,
   TokenProvider,
+  ProviderPresetConfig,
   RefreshTokenStorage,
   TokenParser,
   AuthStrategy,
@@ -61,5 +62,3 @@ export {
   createBodyProvider
 } from './provider/presets'
 
-// Legacy providers đã được thay thế bằng modular architecture
-// Sử dụng createCookieProvider, createBodyProvider thay vì CookieProvider, BodyProvider

@@ -1,9 +1,9 @@
 import type { TokenParser } from '../../types'
 
 /**
- * Cookie parser - parse access token từ response body
+ * Cookie parser - parse access token from response body
  * Expects response format: { data: { accessToken, expiresAt?, user? } }
- * Refresh token được BE tự động set vào httpOnly cookie
+ * Refresh token is automatically set by backend into httpOnly cookie
  */
 export const cookieParser: TokenParser = {
   async parse(response) {
@@ -12,7 +12,6 @@ export const cookieParser: TokenParser = {
       token: json.data.accessToken,
       expiresAt: json.data.expiresAt,
       user: json.data.user
-      // refreshToken không trả về vì là httpOnly cookie
     }
   }
 }

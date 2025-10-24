@@ -1,7 +1,10 @@
 # FetchGuard
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm version](https://img.shields.io/npm/v/fetchguard.svg)](https://www.npmjs.com/package/fetchguard)
+![npm bundle size](https://img.shields.io/bundlephobia/min/fetchguard)
+[![npm downloads](https://img.shields.io/npm/dm/fetchguard.svg)](https://www.npmjs.com/package/fetchguard)
+[![license](https://img.shields.io/npm/l/fetchguard.svg)](https://github.com/minhtaimc/fetchguard/blob/main/LICENSE)
+
 
 FetchGuard is a secure, type-safe API client that runs your network requests inside a Web Worker. Access tokens never touch the main thread, reducing XSS risk while providing automatic token refresh, domain allow-listing, and a clean Result-based API.
 
@@ -94,23 +97,23 @@ Peer dependency: `ts-micro-result`.
 
 ## Quick Start
 
-Pick a provider that matches your backend. For SPAs that return tokens in the response body, use the Body provider. For SSR/httpOnly cookie flows, use the Cookie provider.
+Pick a provider that matches your backend. For SPAs that return tokens in the response body, use the `body-auth` provider. For SSR/httpOnly cookie flows, use the `cookie-auth` provider.
 
 ```ts
-import { createClient, createBodyProvider } from 'fetchguard'
+import { createClient } from 'fetchguard'
 
 const api = createClient({
-  baseUrl: 'https://api.example.com',
-  provider: createBodyProvider({
-    refreshUrl: '/auth/refresh',
-    loginUrl: '/auth/login',
-    logoutUrl: '/auth/logout'
-  }),
+  provider: {
+    type: 'body-auth',  // or 'cookie-auth'
+    refreshUrl: 'https://api.example.com/auth/refresh',
+    loginUrl: 'https://api.example.com/auth/login',
+    logoutUrl: 'https://api.example.com/auth/logout'
+  },
   allowedDomains: ['api.example.com', '*.cdn.example.com']
 })
 
 type User = { id: string; name: string }
-const res = await api.get<User[]>('/users')
+const res = await api.get<User[]>('https://api.example.com/users')
 
 if (res.isOk()) {
   console.log('Users:', res.data)
@@ -191,142 +194,142 @@ const provider = createProvider({
   })
 })
 
-const api = createClient({ baseUrl: '/api', provider })
 ```
 
 ### Preset Providers
 
-- Cookie provider (SSR/httpOnly cookies)
+FetchGuard provides two built-in auth strategies:
 
-  ```ts
-  import { createCookieProvider } from 'fetchguard'
+**1. Cookie Auth** (SSR/httpOnly cookies)
 
-  const provider = createCookieProvider({
-    refreshUrl: '/auth/refresh',
-    loginUrl: '/auth/login',
-    logoutUrl: '/auth/logout'
-  })
-  ```
-
-- Body provider (SPA, persists refresh token in IndexedDB)
-
-  ```ts
-  import { createBodyProvider } from 'fetchguard'
-
-  const provider = createBodyProvider({
-    refreshUrl: '/auth/refresh',
-    loginUrl: '/auth/login',
-    logoutUrl: '/auth/logout',
-    // optional custom key name in IndexedDB
-    refreshTokenKey: 'refreshToken'
-  })
-  ```
-
-### Provider Registry (optional)
+Best for server-side rendered apps where tokens are managed via httpOnly cookies.
 
 ```ts
-import { registerProvider, createClient } from 'fetchguard'
-
-registerProvider('cookie', createCookieProvider({
-  refreshUrl: '/auth/refresh',
-  loginUrl: '/auth/login',
-  logoutUrl: '/auth/logout'
-}))
-
-const api = createClient({ baseUrl: '/api', provider: 'cookie' })
+const api = createClient({
+  provider: {
+    type: 'cookie-auth',
+    refreshUrl: 'https://api.example.com/auth/refresh',
+    loginUrl: 'https://api.example.com/auth/login',
+    logoutUrl: 'https://api.example.com/auth/logout'
+  },
+  allowedDomains: ['api.example.com']
+})
 ```
 
-### Inline Provider (Advanced)
+**2. Body Auth** (SPA with IndexedDB)
 
-You can pass a provider object directly. Its methods are serialized and executed inside the worker sandbox. Keep them self-contained and return `Result<TokenInfo>` via `ok(...)`.
+Best for single-page apps where tokens are returned in response body and persisted to IndexedDB.
 
 ```ts
-import { createClient } from 'fetchguard'
-import { ok /*, err*/ } from 'ts-micro-result'
-import type { TokenInfo } from 'fetchguard'
-
-const api2 = createClient({
-  baseUrl: '/api',
+const api = createClient({
   provider: {
+    type: 'body-auth',
+    refreshUrl: 'https://api.example.com/auth/refresh',
+    loginUrl: 'https://api.example.com/auth/login',
+    logoutUrl: 'https://api.example.com/auth/logout',
+    refreshTokenKey: 'refreshToken'  // Optional, defaults to 'refreshToken'
+  },
+  allowedDomains: ['api.example.com']
+})
+```
+
+### Advanced: Custom Providers via Registry
+
+For complex auth flows, you can create custom providers and register them:
+
+```ts
+import { registerProvider, createClient, createProvider } from 'fetchguard'
+import { createIndexedDBStorage } from 'fetchguard'
+import { ok } from 'ts-micro-result'
+
+// Create custom provider
+const myProvider = createProvider({
+  refreshStorage: createIndexedDBStorage('MyApp', 'refreshToken'),
+  parser: {
+    async parse(response: Response) {
+      const data = await response.json()
+      return {
+        token: data.accessToken,
+        refreshToken: data.refreshToken,
+        expiresAt: data.expiresAt,
+        user: data.user
+      }
+    }
+  },
+  strategy: {
     async refreshToken(refreshToken: string | null) {
-      const res = await fetch('/auth/refresh', {
+      const res = await fetch('https://api.example.com/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-        credentials: 'include'
+        body: JSON.stringify({ refreshToken })
       })
-      const json = await res.json()
-      return ok<TokenInfo>({
-        token: json.data.accessToken,
-        refreshToken: json.data.refreshToken,
-        expiresAt: json.data.expiresAt,
-        user: json.data.user
-      })
+      return res
     },
-
     async login(payload: unknown) {
-      const res = await fetch('/auth/login', {
+      const res = await fetch('https://api.example.com/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        credentials: 'include'
+        body: JSON.stringify(payload)
       })
-      const json = await res.json()
-      return ok<TokenInfo>({
-        token: json.data.accessToken,
-        refreshToken: json.data.refreshToken,
-        expiresAt: json.data.expiresAt,
-        user: json.data.user
-      })
+      return res
     },
-
-    async logout() {
-      await fetch('/auth/logout', { method: 'POST', credentials: 'include' })
-      return ok<TokenInfo>({ token: '', refreshToken: undefined, expiresAt: undefined, user: undefined })
+    async logout(payload?: unknown) {
+      const res = await fetch('https://api.example.com/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {})
+      })
+      return res
     }
   }
 })
+
+// Register provider
+registerProvider('my-custom-auth', myProvider)
+
+// Use registered provider
+const api = createClient({
+  provider: 'my-custom-auth',  // Reference by name
+  allowedDomains: ['api.example.com']
+})
 ```
 
-Notes:
-- Functions run inside the worker; do not rely on variables from your app file.
-- Use standard Web APIs only (fetch/JSON); avoid importing inside the function body.
-- Tokens are applied and stored inside the worker closure automatically.
 
-### Custom Auth Methods
+### Custom Auth Methods (Advanced)
 
-Add custom auth methods to your provider and call them via `api.call(name, ...args)`. The worker updates tokens and emits `AUTH_STATE_CHANGED` on success.
+You can add custom auth methods to your provider strategy and call them via `api.call(methodName, ...args)`:
 
 ```ts
-// Extend the inline provider with a custom method
-const api3 = createClient({
-  baseUrl: '/api',
-  provider: {
-    async loginWithOTP({ phone, code }: { phone: string; code: string }) {
-      const res = await fetch('/auth/login/otp', {
+import { createProvider, createIndexedDBStorage, bodyParser } from 'fetchguard'
+import { ok } from 'ts-micro-result'
+
+const myProvider = createProvider({
+  refreshStorage: createIndexedDBStorage('MyApp', 'refreshToken'),
+  parser: bodyParser,
+  strategy: {
+    // Standard methods
+    async refreshToken(refreshToken: string | null) { /* ... */ },
+    async login(payload: unknown) { /* ... */ },
+    async logout(payload?: unknown) { /* ... */ },
+
+    // Custom method - OTP login
+    async loginWithOTP(payload: { phone: string; code: string }) {
+      const res = await fetch('https://api.example.com/auth/login/otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, code }),
-        credentials: 'include'
+        body: JSON.stringify(payload)
       })
-      const json = await res.json()
-      return ok<TokenInfo>({
-        token: json.data.accessToken,
-        refreshToken: json.data.refreshToken,
-        expiresAt: json.data.expiresAt,
-        user: json.data.user
-      })
-    },
-
-    // plus the required methods: refreshToken/login/logout
-    async refreshToken(rt: string | null) { /* ... */ },
-    async login(payload: unknown) { /* ... */ },
-    async logout() { /* ... */ }
+      return res
+    }
   }
 })
 
-// Use the custom method
-await api3.call('loginWithOTP', { phone: '+84xxxxxxxxx', code: '123456' })
+// Register and use
+registerProvider('otp-auth', myProvider)
+const api = createClient({ provider: 'otp-auth' })
+
+// Call custom method
+await api.call('loginWithOTP', { phone: '+1234567890', code: '123456' })
 ```
 
 ## Domain Allow-List
@@ -353,15 +356,17 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
 
 ## API Reference
 
-- createClient(options)
-  - baseUrl?: string
-  - provider: TokenProvider | string (registry name)
-  - allowedDomains?: string[]
-  - debug?: boolean
-  - refreshEarlyMs?: number
-  - defaultTimeoutMs?: number
-  - retryCount?: number
-  - retryDelayMs?: number
+### `createClient(options)`
+
+- `provider`: `ProviderPresetConfig | string` (required)
+  - Config object: `{ type: 'cookie-auth' | 'body-auth', refreshUrl, loginUrl, logoutUrl, ... }`
+  - String: Registered provider name
+- `allowedDomains?`: `string[]` - Domain whitelist (supports wildcards)
+- `debug?`: `boolean` - Enable debug logging in worker
+- `refreshEarlyMs?`: `number` - Refresh token X ms before expiry (default: 60000)
+- `defaultTimeoutMs?`: `number` - Request timeout (default: 120000)
+- `retryCount?`: `number` - Retry failed requests (default: 3)
+- `retryDelayMs?`: `number` - Delay between retries (default: 1000)
 
 - FetchGuardClient
   - fetch(url, options?): Result<ApiResponse<T>>

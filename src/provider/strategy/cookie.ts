@@ -2,10 +2,10 @@ import type { AuthStrategy } from '../../types'
 
 /**
  * Cookie auth strategy - all auth operations via httpOnly cookies
- * Phù hợp cho SSR và cross-domain authentication
+ * Suitable for SSR and cross-domain authentication
  *
- * Refresh token được gửi tự động qua httpOnly cookie
- * Credentials được gửi trong request body
+ * Refresh token is sent automatically via httpOnly cookie
+ * Credentials are sent in request body
  */
 export function createCookieStrategy(config: {
   refreshUrl: string
@@ -17,7 +17,7 @@ export function createCookieStrategy(config: {
       return fetch(config.refreshUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include' // Quan trọng: gửi httpOnly cookies
+        credentials: 'include'
       })
     },
 

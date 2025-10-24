@@ -1,7 +1,7 @@
 import type { TokenParser } from '../../types'
 
 /**
- * Body parser - parse token từ response body (JSON)
+ * Body parser - parse token from response body (JSON)
  * Expects response format: { data: { accessToken, refreshToken, expiresAt?, user? } }
  */
 export const bodyParser: TokenParser = {

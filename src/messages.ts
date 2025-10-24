@@ -1,5 +1,5 @@
 import type { SerializedResult } from 'ts-micro-result'
-import type { WorkerConfig, FetchGuardRequestInit } from './types'
+import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig } from './types'
 
 /**
  * MESSAGE PAYLOADS - SINGLE SOURCE OF TRUTH
@@ -25,7 +25,7 @@ import type { WorkerConfig, FetchGuardRequestInit } from './types'
  * Payloads for messages sent from Main thread → Worker thread
  */
 export interface MainPayloads {
-  SETUP: { config: WorkerConfig; providerCode: string }
+  SETUP: { config: WorkerConfig; providerConfig: ProviderPresetConfig | string | null }
   FETCH: { url: string; options?: FetchGuardRequestInit }
   AUTH_CALL: { method: string; args: unknown[] }  // Generic auth method call (login, logout, loginWithPhone, etc.)
   CANCEL: undefined

@@ -18,9 +18,16 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && npm run typecheck",
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:node && npm run test:browser",
+    "test:node": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
+    "test:ui": "vitest --config vitest.config.ts --ui",
+    "test:coverage": "vitest run --config vitest.config.ts --coverage",
+    "test:browser": "npm run build && vitest --config vitest.browser.config.ts --browser chromium",
     "prepublishOnly": "npm run build",
     "prepack": "npm run build"
   },
@@ -35,8 +42,15 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@vitest/browser": "^4.0.2",
+    "@vitest/browser-playwright": "^4.0.2",
+    "@vitest/ui": "^4.0.2",
+    "happy-dom": "^20.0.8",
+    "playwright": "^1.45.1",
+    "ts-micro-result": "^2.1.10",
     "tsup": "^8.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.2"
   },
   "peerDependencies": {
     "ts-micro-result": "^2.1.10"

@@ -2,7 +2,6 @@
 
 import type { WorkerConfig } from './types'
 import type { MainToWorkerMessage } from './messages'
-// removed error classes import; we use Result-based errors instead
 import { ok, err, type Result } from 'ts-micro-result'
 import { MSG } from './messages'
 import { DEFAULT_REFRESH_EARLY_MS } from './constants'
@@ -14,6 +13,8 @@ import {
   GeneralErrors
 } from './errors'
 import { sendAuthStateChanged, sendPong, sendReady, sendResult, sendFetchResult, sendFetchError } from './worker-post'
+import { getProvider } from './utils/registry'
+import { buildProviderFromPreset } from './provider/register-presets'
 
 /**
  * IIFE Closure to protect sensitive tokens from external access
@@ -23,11 +24,11 @@ import { sendAuthStateChanged, sendPong, sendReady, sendResult, sendFetchResult,
   let config: WorkerConfig | null = null
   let provider: any = null
   let accessToken: string | null = null
-  let refreshToken: string | null = null // Refresh token in worker memory
+  let refreshToken: string | null = null
   let expiresAt: number | null = null
   let currentUser: unknown | undefined
   const pendingControllers = new Map<string, AbortController>()
-  let refreshPromise: Promise<void> | null = null // Prevent concurrent refresh
+  let refreshPromise: Promise<void> | null = null
 
 /**
  * Ensure we have a valid access token (not expired).
@@ -35,7 +36,6 @@ import { sendAuthStateChanged, sendPong, sendReady, sendResult, sendFetchResult,
  * Prevents concurrent refresh attempts.
  */
 async function ensureValidToken(): Promise<Result<string | null>> {
-  // If we have a valid token that's not expired (with buffer), return it
   if (accessToken && expiresAt) {
     const refreshEarlyMs = config?.refreshEarlyMs ?? DEFAULT_REFRESH_EARLY_MS
     const timeLeft = expiresAt - Date.now()
@@ -44,27 +44,22 @@ async function ensureValidToken(): Promise<Result<string | null>> {
     }
   }
 
-  // If refresh is already in progress, wait for it
   if (refreshPromise) {
     await refreshPromise
     return ok(accessToken)
   }
 
-  // Start refresh
   refreshPromise = (async () => {
     try {
-      // Gọi provider.refreshToken() với refreshToken từ memory
       const valueRes = await provider.refreshToken(refreshToken)
 
       if (valueRes.isError()) {
-        // Refresh failed - clear token state
         setTokenState({ token: null, expiresAt: null, user: undefined, refreshToken: undefined })
         return
       }
 
       const tokenInfo = valueRes.data
 
-      // Update access token + refresh token trong memory
       setTokenState(tokenInfo)
     } finally {
       refreshPromise = null
@@ -122,32 +117,26 @@ async function makeApiRequest(url: string, options: any = {}) {
     return err(InitErrors.NotInitialized())
   }
 
-  // Validate domain
   if (!validateDomain(url)) {
     return err(DomainErrors.NotAllowed({ url }))
   }
 
-  // Extract FetchGuard-specific options
-  const requiresAuth = options.requiresAuth !== false // Default: true
-  const includeHeaders = options.includeHeaders === true // Default: false
+  const requiresAuth = options.requiresAuth !== false
+  const includeHeaders = options.includeHeaders === true
   const fetchOptions: RequestInit = { ...options }
-  delete (fetchOptions as any).requiresAuth // Remove custom fields before fetch
+  delete (fetchOptions as any).requiresAuth
   delete (fetchOptions as any).includeHeaders
 
-  // Prepare headers
   const headers: Record<string, string> = {
     ...(fetchOptions.headers as Record<string, string> || {})
   }
 
-  // Only add Content-Type if not already set and body is present
   if (!headers['Content-Type'] && !headers['content-type'] && fetchOptions.body) {
-    // Only set JSON content-type if body is an object (will be stringified)
     if (typeof fetchOptions.body === 'object' && !(fetchOptions.body instanceof FormData) && !(fetchOptions.body instanceof URLSearchParams)) {
       headers['Content-Type'] = 'application/json'
     }
   }
 
-  // Conditionally add auth token (only for protected APIs)
   if (requiresAuth) {
     const tokenRes = await ensureValidToken()
     if (tokenRes.isError()) return tokenRes
@@ -158,7 +147,6 @@ async function makeApiRequest(url: string, options: any = {}) {
     }
   }
 
-  // Make request (non-throwing)
   let response: Response | null = null
   let networkErr: Result<never> | null = null
   response = await fetch(url, { ...fetchOptions, headers, credentials: 'include' }).catch((e) => {
@@ -168,7 +156,6 @@ async function makeApiRequest(url: string, options: any = {}) {
   })
   if (!response) return (networkErr ?? err(NetworkErrors.NetworkError({ message: 'Unknown network error' })))
 
-  // Get response body as text (main thread will parse JSON if needed)
   const body = await response.text()
   let responseHeaders: Record<string, string> | undefined
   if (includeHeaders) {
@@ -178,7 +165,6 @@ async function makeApiRequest(url: string, options: any = {}) {
     })
   }
 
-  // Return success/error - main thread will parse body
   return response.ok
     ? ok({ body, status: response.status, headers: responseHeaders })
     : err(NetworkErrors.HttpError({ message: `HTTP ${response.status}: ${body}` }))
@@ -193,7 +179,6 @@ function setTokenState(tokenInfo: { token: string | null; expiresAt?: number | n
   currentUser = tokenInfo.user
   refreshToken = tokenInfo.refreshToken ?? null
 
-  // Auto emit AUTH_STATE_CHANGED event
   postAuthChanged()
 }
 
@@ -220,23 +205,21 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         const payload = data.payload
         config = payload.config
 
-        // Recreate provider from serialized code
-        // Deserialize tất cả methods (bao gồm custom auth methods)
-        const providerCode = payload.providerCode as unknown as Record<string, string>
+        const providerConfig = payload.providerConfig
 
-        provider = {} as any
-
-        // Deserialize tất cả methods
-        for (const key in providerCode) {
-          if (typeof providerCode[key] === 'string') {
-            provider[key] = eval(`(${providerCode[key]})`)
-          }
+        // Build provider from config
+        if (typeof providerConfig === 'string') {
+          // Registry lookup
+          provider = getProvider(providerConfig)
+        } else if (providerConfig && typeof providerConfig === 'object' && 'type' in providerConfig) {
+          // ProviderPresetConfig object
+          provider = buildProviderFromPreset(providerConfig as any)
+        } else {
+          throw new Error('Invalid provider config')
         }
 
-        // Setup complete - worker is ready
         sendReady()
       } catch (error) {
-        // Setup failed - send error via console (no id to send RESULT)
         console.error('[FetchGuard Worker] Setup failed:', error)
       }
       break
@@ -246,13 +229,11 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       const { id } = data
       try {
         const { url, options } = data.payload
-        // manage AbortController for CANCEL support
         const controller = new AbortController()
         pendingControllers.set(id, controller)
         const merged: RequestInit = { ...(options || {}), signal: controller.signal }
         const result = await makeApiRequest(url, merged)
 
-        // Send FETCH_RESULT or FETCH_ERROR based on result
         if (result.isOk()) {
           const response = result.data as { body: string; status: number; headers?: Record<string, string> }
           sendFetchResult(id, response.status, response.body, response.headers)
@@ -276,22 +257,18 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       try {
         const { method, args } = payload
 
-        // Check if method exists on provider
         if (typeof provider[method] !== 'function') {
           sendResult(id, err(GeneralErrors.Unexpected({ message: `Method '${method}' not found on provider` })))
           break
         }
 
-        // Call provider method dynamically
         const result = await provider[method](...args)
         if (result.isError()) { sendResult(id, result); break }
 
         const tokenInfo = result.data
 
-        // Update tokens in memory (auto emit AUTH_STATE_CHANGED)
         setTokenState(tokenInfo)
 
-        // Send result back - simple ACK
         sendResult(id, ok(undefined))
       } catch (error) {
         sendResult(id, err(GeneralErrors.Unexpected({ message: error instanceof Error ? error.message : String(error) })))
@@ -308,7 +285,6 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
           pendingControllers.delete(id)
         }
       } catch (error) {
-        // Cancel errors are not critical, just log if debug enabled
         if (config?.debug) {
           console.error('CANCEL error:', error)
         }

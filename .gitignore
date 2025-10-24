@@ -2,13 +2,20 @@
 node_modules/
 .pnp
 .pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
 
+# Project specific
 CLAUDE.md
 .claude/
 
 # Production builds
 dist/
 build/
+lib/
+out/
 
 # Environment variables
 .env
@@ -16,26 +23,41 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*.local
 
-# IDE
+# IDE & Editors
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
+*~
 .DS_Store
 Thumbs.db
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
 
 # Logs
+logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.pnpm-debug.log*
 
 # Runtime data
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
@@ -43,15 +65,19 @@ pids
 # Coverage directory used by tools like istanbul
 coverage/
 *.lcov
-
-# nyc test coverage
 .nyc_output
+
+# Test results
+test-results/
+playwright-report/
+test-results.xml
 
 # Dependency directories
 jspm_packages/
 
-# TypeScript cache
+# TypeScript
 *.tsbuildinfo
+.tscache/
 
 # Optional npm cache directory
 .npm
@@ -92,3 +118,15 @@ dist
 # Temporary folders
 tmp/
 temp/
+.tmp/
+
+# Lock files (keep package-lock.json but ignore others)
+yarn.lock
+pnpm-lock.yaml
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json

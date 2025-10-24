@@ -7,11 +7,11 @@ import { createBodyStrategy } from './strategy/body'
 import type { TokenProvider } from '../types'
 
 /**
- * Cookie Provider - sử dụng httpOnly cookies
- * Phù hợp cho SSR và cross-domain authentication
+ * Cookie Provider - uses httpOnly cookies
+ * Suitable for SSR and cross-domain authentication
  *
  * Access token: Worker memory
- * Refresh token: httpOnly cookie (BE quản lý)
+ * Refresh token: httpOnly cookie (managed by backend)
  */
 export function createCookieProvider(config: {
   refreshUrl: string
@@ -19,18 +19,18 @@ export function createCookieProvider(config: {
   logoutUrl: string
 }): TokenProvider {
   return createProvider({
-    refreshStorage: undefined, // Không cần storage - cookie-based
+    refreshStorage: undefined,
     parser: cookieParser,
     strategy: createCookieStrategy(config)
   })
 }
 
 /**
- * Body Provider - refresh token trong response body, persist vào IndexedDB
- * Phù hợp cho SPA applications
+ * Body Provider - refresh token in response body, persisted to IndexedDB
+ * Suitable for SPA applications
  *
  * Access token: Worker memory
- * Refresh token: IndexedDB (persist qua reload)
+ * Refresh token: IndexedDB (persists across reload)
  */
 export function createBodyProvider(config: {
   refreshUrl: string

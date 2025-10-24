@@ -2,9 +2,9 @@ import type { AuthStrategy } from '../../types'
 
 /**
  * Body auth strategy - all auth operations via request body
- * Phù hợp cho SPA applications
+ * Suitable for SPA applications
  *
- * All tokens/credentials được gửi trong request body
+ * All tokens/credentials are sent in request body
  */
 export function createBodyStrategy(config: {
   refreshUrl: string

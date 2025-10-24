@@ -14,13 +14,13 @@ import { AuthErrors, NetworkErrors } from '../errors'
 type CustomAuthMethod = (...args: any[]) => Promise<Result<TokenInfo>>
 
 /**
- * Cấu hình để tạo provider
+ * Configuration for creating provider
  *
- * refreshStorage: OPTIONAL - để load refresh token lần đầu khi worker khởi động
- * - undefined: cookie-based auth (httpOnly cookie, không cần load)
- * - RefreshTokenStorage: body-based auth (load từ IndexedDB khi khởi động)
+ * refreshStorage: OPTIONAL - to load refresh token initially when worker starts
+ * - undefined: cookie-based auth (httpOnly cookie, no need to load)
+ * - RefreshTokenStorage: body-based auth (load from IndexedDB on startup)
  *
- * strategy: AuthStrategy với refresh (required), login/logout (required)
+ * strategy: AuthStrategy with refresh (required), login/logout (required)
  *
  * customMethods: OPTIONAL - custom auth methods (loginWithPhone, loginWithGoogle, etc.)
  */
@@ -32,27 +32,25 @@ export interface ProviderConfig {
 }
 
 /**
- * Factory function để tạo TokenProvider từ các thành phần modular
+ * Factory function to create TokenProvider from modular components
  *
- * Provider tự động xử lý refresh token:
- * - Nếu refreshToken null và có storage → load từ storage lần đầu
- * - Nếu refreshToken có → dùng token từ worker memory
- * - Cookie-based (không có storage) → luôn null
+ * Provider automatically handles refresh token:
+ * - If refreshToken is null and storage exists → load from storage initially
+ * - If refreshToken exists → use token from worker memory
+ * - Cookie-based (no storage) → always null
  *
  * Custom methods:
- * - User có thể thêm custom auth methods (loginWithPhone, loginWithGoogle, etc.)
- * - Custom methods sẽ được spread vào provider object
+ * - User can add custom auth methods (loginWithPhone, loginWithGoogle, etc.)
+ * - Custom methods will be spread into provider object
  */
 export function createProvider(config: ProviderConfig): TokenProvider {
   const baseProvider: Pick<TokenProvider, 'refreshToken' | 'login' | 'logout'> = {
     async refreshToken(refreshToken: string | null) {
-      // 1. Nếu refreshToken null và có storage → load từ storage lần đầu
       let currentRefreshToken = refreshToken
       if (currentRefreshToken === null && config.refreshStorage) {
         currentRefreshToken = await config.refreshStorage.get()
       }
 
-      // 2. Call strategy để gọi refresh API
       try {
         const response = await config.strategy.refresh(currentRefreshToken)
 
@@ -60,18 +58,15 @@ export function createProvider(config: ProviderConfig): TokenProvider {
           return err(AuthErrors.TokenRefreshFailed({ message: `HTTP ${response.status}` }))
         }
 
-        // 3. Parse response → trả về TokenInfo
         const tokenInfo = await config.parser.parse(response)
         if (!tokenInfo.token) {
           return err(AuthErrors.TokenRefreshFailed({ message: 'No access token in response' }))
         }
 
-        // 4. Lưu refresh token mới vào storage (nếu có và có token mới)
         if (config.refreshStorage && tokenInfo.refreshToken) {
           await config.refreshStorage.set(tokenInfo.refreshToken)
         }
 
-        // 5. Return TokenInfo
         return ok(tokenInfo)
       } catch (error) {
         return err(NetworkErrors.NetworkError({ message: String(error) }))
@@ -91,7 +86,6 @@ export function createProvider(config: ProviderConfig): TokenProvider {
           return err(AuthErrors.LoginFailed({ message: 'No access token in response' }))
         }
 
-        // Lưu refresh token vào storage (nếu có)
         if (config.refreshStorage && tokenInfo.refreshToken) {
           await config.refreshStorage.set(tokenInfo.refreshToken)
         }
@@ -110,12 +104,10 @@ export function createProvider(config: ProviderConfig): TokenProvider {
           return err(AuthErrors.LogoutFailed({ message: `HTTP ${response.status}` }))
         }
 
-        // Clear refresh token từ storage (nếu có)
         if (config.refreshStorage) {
           await config.refreshStorage.set(null)
         }
 
-        // Return TokenInfo với tất cả fields reset
         return ok({
           token: '',
           refreshToken: undefined,

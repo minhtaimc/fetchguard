@@ -10,7 +10,7 @@ import type { Result } from 'ts-micro-result'
  */
 
 /**
- * Token info trả về từ provider
+ * Token info returned from provider
  */
 export interface TokenInfo {
   token: string
@@ -20,26 +20,26 @@ export interface TokenInfo {
 }
 
 /**
- * Interface cho token provider
+ * Interface for token provider
  *
- * Provider có 3 methods bắt buộc:
- * - refreshToken: Refresh access token khi expired
- * - login: Đăng nhập với credentials
- * - logout: Đăng xuất (clear tokens)
+ * Provider has 3 required methods:
+ * - refreshToken: Refresh access token when expired
+ * - login: Login with credentials
+ * - logout: Logout (clear tokens)
  *
- * User có thể thêm custom auth methods (loginWithPhone, loginWithGoogle, etc.)
- * Tất cả custom methods phải return Result<TokenInfo> vì mục đích là lấy tokens
+ * User can add custom auth methods (loginWithPhone, loginWithGoogle, etc.)
+ * All custom methods must return Result<TokenInfo> for token retrieval
  */
 export interface TokenProvider {
   /**
    * Refresh tokens (required)
-   * @param refreshToken - Current refresh token (from worker memory, null nếu chưa có)
+   * @param refreshToken - Current refresh token (from worker memory, null if not available)
    * @returns Result<TokenInfo> with new tokens
    */
   refreshToken(refreshToken: string | null): Promise<Result<TokenInfo>>
 
   /**
-   * Login với credentials (required)
+   * Login with credentials (required)
    * @param payload - Login credentials (email/password, etc.)
    * @returns Result<TokenInfo> with tokens
    */
@@ -48,25 +48,25 @@ export interface TokenProvider {
   /**
    * Logout - clear tokens (required)
    * @param payload - Optional logout payload
-   * @returns Result<TokenInfo> với tất cả fields reset (token = '', refreshToken = undefined, user = undefined)
+   * @returns Result<TokenInfo> with all fields reset (token = '', refreshToken = undefined, user = undefined)
    */
   logout(payload?: unknown): Promise<Result<TokenInfo>>
 
   /**
    * Custom auth methods (optional)
-   * Ví dụ: loginWithPhone, loginWithGoogle, loginWithFacebook, etc.
-   * Tất cả phải return Result<TokenInfo> vì mục đích là lấy tokens
+   * Examples: loginWithPhone, loginWithGoogle, loginWithFacebook, etc.
+   * All must return Result<TokenInfo> for token retrieval
    */
   [key: string]: (...args: any[]) => Promise<Result<TokenInfo>>
 }
 
 /**
- * Interface cho refresh token storage - chỉ lưu refresh token
+ * Interface for refresh token storage - only stores refresh token
  *
- * Access token luôn lưu trong worker memory.
- * Refresh token storage là OPTIONAL:
- * - Nếu có (IndexedDB): persist refresh token để dùng lại sau khi reload
- * - Nếu không (undefined): cookie-based auth (httpOnly cookie)
+ * Access token is always stored in worker memory.
+ * Refresh token storage is OPTIONAL:
+ * - If available (IndexedDB): persist refresh token for reuse after reload
+ * - If not (undefined): cookie-based auth (httpOnly cookie)
  */
 export interface RefreshTokenStorage {
   get(): Promise<string | null>
@@ -74,18 +74,18 @@ export interface RefreshTokenStorage {
 }
 
 /**
- * Interface cho token parser - parse token từ response của BE
- * Parser trả về đầy đủ TokenInfo (bao gồm user data)
+ * Interface for token parser - parse token from backend response
+ * Parser returns complete TokenInfo (including user data)
  */
 export interface TokenParser {
   parse(response: Response): Promise<TokenInfo>
 }
 
 /**
- * Interface cho auth strategy - định nghĩa cách call auth APIs
+ * Interface for auth strategy - defines how to call auth APIs
  *
- * Strategy chỉ focus vào việc gọi API, trả về Response
- * Provider sẽ xử lý parsing và storage
+ * Strategy focuses only on API calls, returns Response
+ * Provider handles parsing and storage
  *
  * All methods are required
  */
@@ -101,39 +101,51 @@ export interface AuthStrategy {
 }
 
 /**
- * Cấu hình cho FetchGuard client
+ * Provider preset configuration for built-in auth strategies
+ */
+export interface ProviderPresetConfig {
+  type: 'cookie-auth' | 'body-auth'
+  refreshUrl: string
+  loginUrl: string
+  logoutUrl: string
+  refreshTokenKey?: string
+}
+
+/**
+ * Configuration for FetchGuard client
  */
 export interface FetchGuardOptions {
-  /** Base URL cho API requests */
-  baseUrl?: string
+  /**
+   * Token provider - 3 options:
+   * 1. TokenProvider instance (for custom providers)
+   * 2. ProviderPresetConfig object (for built-in presets)
+   * 3. string (for registry lookup - advanced usage)
+   */
+  provider: TokenProvider | ProviderPresetConfig | string
 
-  /** Token provider instance hoặc tên provider đã đăng ký */
-  provider: TokenProvider | string
-
-  /** Danh sách domain được phép (wildcard supported) */
+  /** List of allowed domains (wildcard supported) */
   allowedDomains?: string[]
 
   /** Debug mode */
   debug?: boolean
 
-  /** Thời gian refresh token sớm (ms) */
+  /** Early refresh time for tokens (ms) */
   refreshEarlyMs?: number
 
-  /** Timeout mặc định cho requests (ms) */
+  /** Default timeout for requests (ms) */
   defaultTimeoutMs?: number
 
-  /** Số lần retry mặc định */
+  /** Default retry count */
   retryCount?: number
 
-  /** Delay giữa các lần retry (ms) */
+  /** Delay between retries (ms) */
   retryDelayMs?: number
 }
 
 /**
- * Cấu hình worker internal
+ * Internal worker configuration
  */
 export interface WorkerConfig {
-  baseUrl: string
   allowedDomains: string[]
   debug: boolean
   refreshEarlyMs: number
@@ -161,5 +173,4 @@ export interface ApiResponse<T = unknown> {
   headers: Record<string, string>
 }
 
-// Legacy error classes removed; use grouped errors in errors.ts instead
 

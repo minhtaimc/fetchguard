@@ -1,6 +1,5 @@
 /**
  * Error definitions organized by domain
- * Inspired by old-workers/errors.ts
  * Using ts-micro-result's defineError for consistency
  */
 

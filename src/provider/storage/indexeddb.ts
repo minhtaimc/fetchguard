@@ -1,9 +1,9 @@
 import type { RefreshTokenStorage } from '../../types'
 
 /**
- * IndexedDB storage - chỉ lưu refresh token trong IndexedDB
- * Phù hợp cho body-based refresh strategy
- * Persist refresh token để dùng lại sau khi reload
+ * IndexedDB storage - only stores refresh token in IndexedDB
+ * Suitable for body-based refresh strategy
+ * Persists refresh token for reuse after reload
  */
 export function createIndexedDBStorage(dbName = 'FetchGuardDB', refreshTokenKey = 'refreshToken'): RefreshTokenStorage {
   const storeName = 'tokens'
