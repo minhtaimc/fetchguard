@@ -60,10 +60,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-username/fetchguard.git"
+    "url": "git+https://github.com/minhtaimc/fetchguard.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/fetchguard/issues"
+    "url": "https://github.com/minhtaimc/fetchguard/issues"
   },
-  "homepage": "https://github.com/your-username/fetchguard#readme"
+  "homepage": "https://github.com/minhtaimc/fetchguard#readme"
 }
