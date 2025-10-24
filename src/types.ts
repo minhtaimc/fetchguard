@@ -19,6 +19,8 @@ export interface TokenInfo {
   user?: unknown
 }
 
+export type AuthResponseMode = 'result-only' | 'event-only' | 'both'
+
 /**
  * Interface for token provider
  *
@@ -172,5 +174,3 @@ export interface ApiResponse<T = unknown> {
   status: number
   headers: Record<string, string>
 }
-
-

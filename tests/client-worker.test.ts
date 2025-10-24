@@ -1,4 +1,5 @@
-import { beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ok as resultOk } from 'ts-micro-result'
 import { FetchGuardClient } from '../src/client'
 import { MSG } from '../src/messages'
 import { waitFor } from './test-utils'
@@ -40,6 +41,33 @@ class MockWorker {
         })
       }, 0)
     }
+
+    if (message.type === MSG.AUTH_CALL) {
+      setTimeout(() => {
+        const mode = message.payload?.responseMode ?? 'result-only'
+        const state = { authenticated: true, expiresAt: Date.now() + 10_000, user: { id: 'mock-user' } }
+
+        if (mode !== 'event-only') {
+          this.onmessage?.({
+            data: {
+              type: MSG.RESULT,
+              id: message.id,
+              payload: { result: resultOk(state).toJSON() }
+            }
+          })
+        }
+
+        if (mode !== 'result-only') {
+          this.onmessage?.({
+            data: {
+              type: MSG.AUTH_STATE_CHANGED,
+              id: `evt_${Date.now()}`,
+              payload: state
+            }
+          })
+        }
+      }, 0)
+    }
   }
 
   terminate(): void {
@@ -66,7 +94,7 @@ beforeEach(() => {
 })
 
 describe('FetchGuardClient worker integration', () => {
-  it('khởi tạo worker và hoàn tất handshake READY', async () => {
+  it('creates worker and completes READY handshake', async () => {
     const client = new FetchGuardClient({
       provider: {
         type: 'body-auth',
@@ -100,4 +128,29 @@ describe('FetchGuardClient worker integration', () => {
 
     client.destroy()
   })
+
+  it('defaults auth call response mode to result-only', async () => {
+    const client = new FetchGuardClient({
+      provider: {
+        type: 'body-auth',
+        refreshUrl: '/auth/refresh',
+        loginUrl: '/auth/login',
+        logoutUrl: '/auth/logout',
+        refreshTokenKey: 'refresh-token'
+      }
+    })
+
+    const instance = MockWorker.instances[0]
+    await waitFor(() => instance?.readyEvents === 1)
+
+    await client.call('customMethod')
+
+    const authMessage = instance?.messages.find(
+      (msg) => msg.type === MSG.AUTH_CALL && msg.payload?.method === 'customMethod'
+    )
+    expect(authMessage?.payload?.responseMode).toBe('result-only')
+
+    client.destroy()
+  })
+
 })

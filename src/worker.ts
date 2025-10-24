@@ -173,13 +173,15 @@ async function makeApiRequest(url: string, options: any = {}) {
 /**
  * Update token state from TokenInfo and auto emit AUTH_STATE_CHANGED
  */
-function setTokenState(tokenInfo: { token: string | null; expiresAt?: number | null; user?: unknown; refreshToken?: string }) {
+function setTokenState(tokenInfo: { token: string | null; expiresAt?: number | null; user?: unknown; refreshToken?: string }, emitEvent: boolean = true) {
   accessToken = tokenInfo.token
   expiresAt = tokenInfo.expiresAt ?? null
   currentUser = tokenInfo.user
   refreshToken = tokenInfo.refreshToken ?? null
 
-  postAuthChanged()
+  if (emitEvent) {
+    postAuthChanged()
+  }
 }
 
 /**
@@ -255,7 +257,8 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
     case MSG.AUTH_CALL: {
       const { id, payload } = data
       try {
-        const { method, args } = payload
+        const { method, args, responseMode } = payload
+        const mode = responseMode ?? 'result-only'
 
         if (typeof provider[method] !== 'function') {
           sendResult(id, err(GeneralErrors.Unexpected({ message: `Method '${method}' not found on provider` })))
@@ -263,13 +266,35 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         }
 
         const result = await provider[method](...args)
-        if (result.isError()) { sendResult(id, result); break }
+        if (result.isError()) {
+          sendResult(id, result)
+          break
+        }
 
         const tokenInfo = result.data
 
-        setTokenState(tokenInfo)
+        const shouldEmitEvent = mode !== 'result-only'
+        const shouldSendResult = mode !== 'event-only'
 
-        sendResult(id, ok(undefined))
+        setTokenState(tokenInfo, shouldEmitEvent)
+
+        if (shouldSendResult) {
+          const now = Date.now()
+          const authenticated =
+            accessToken !== null && accessToken !== '' && (expiresAt === null || expiresAt > now)
+
+          sendResult(
+            id,
+            ok({
+              authenticated,
+              expiresAt,
+              user: currentUser
+            })
+          )
+        }
+        else{
+          sendResult(id, ok(undefined))
+        }
       } catch (error) {
         sendResult(id, err(GeneralErrors.Unexpected({ message: error instanceof Error ? error.message : String(error) })))
       }

@@ -3,7 +3,8 @@ import type {
   FetchGuardRequestInit,
   WorkerConfig,
   ApiResponse,
-  ProviderPresetConfig
+  ProviderPresetConfig,
+  AuthResponseMode
 } from './types'
 import { fromJSON, ok, err, type Result } from 'ts-micro-result'
 import { MSG } from './messages'
@@ -333,11 +334,11 @@ export class FetchGuardClient {
    * Generic method to call any auth method on provider
    * @param method - Method name (login, logout, loginWithPhone, etc.)
    * @param args - Arguments to pass to the method
-   * @returns Result with success (auth state changes emitted via AUTH_STATE_CHANGED event)
+   * @returns Result base on responseMode
    */
-  async call(method: string, ...args: unknown[]): Promise<Result<void>> {
+  async call(method: string, responseMode?: AuthResponseMode, ...args: unknown[]): Promise<Result<void>> {
     const id = this.generateMessageId()
-    const message = { id, type: MSG.AUTH_CALL, payload: { method, args } }
+    const message = { id, type: MSG.AUTH_CALL, payload: { method, args, responseMode } }
 
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(id, {
@@ -355,20 +356,28 @@ export class FetchGuardClient {
     })
   }
 
+
   /**
    * Convenience wrapper for login
-   * Note: Auth state changes are emitted via onAuthStateChanged event
    */
-  async login(payload?: unknown): Promise<Result<void>> {
-    return this.call('login', payload)
+  async login(payload?: unknown, responseMode: AuthResponseMode = 'both'): Promise<Result<void>> {
+    const args = typeof payload === 'undefined' ? [] : [payload]
+    return this.call('login', responseMode, args)
   }
 
   /**
    * Convenience wrapper for logout
-   * Note: Auth state changes are emitted via onAuthStateChanged event
    */
-  async logout(payload?: unknown): Promise<Result<void>> {
-    return this.call('logout', payload)
+  async logout(payload?: unknown, responseMode: AuthResponseMode = 'event-only'): Promise<Result<void>> {
+    const args = typeof payload === 'undefined' ? [] : [payload]
+    return this.call('logout', responseMode, args)
+  }
+
+  /**
+   * Convenience wrapper for refreshToken
+   */
+  async refreshToken(responseMode?: AuthResponseMode): Promise<Result<void>> {
+    return this.call('refreshToken', responseMode, [])
   }
 
   /**
@@ -519,4 +528,3 @@ export class FetchGuardClient {
 export function createClient(options: FetchGuardOptions): FetchGuardClient {
   return new FetchGuardClient(options)
 }
-

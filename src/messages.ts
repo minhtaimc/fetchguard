@@ -1,5 +1,5 @@
 import type { SerializedResult } from 'ts-micro-result'
-import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig } from './types'
+import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig, AuthResponseMode } from './types'
 
 /**
  * MESSAGE PAYLOADS - SINGLE SOURCE OF TRUTH
@@ -27,7 +27,7 @@ import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig } from '
 export interface MainPayloads {
   SETUP: { config: WorkerConfig; providerConfig: ProviderPresetConfig | string | null }
   FETCH: { url: string; options?: FetchGuardRequestInit }
-  AUTH_CALL: { method: string; args: unknown[] }  // Generic auth method call (login, logout, loginWithPhone, etc.)
+  AUTH_CALL: { method: string; args: unknown[]; responseMode?: AuthResponseMode }  // Generic auth method call (login, logout, loginWithPhone, etc.)
   CANCEL: undefined
   PING: { timestamp: number }
 }

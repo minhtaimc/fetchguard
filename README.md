@@ -372,8 +372,10 @@ const myProvider = createProvider({
 registerProvider('otp-auth', myProvider)
 const api = createClient({ provider: 'otp-auth' })
 
-// Call custom method
-await api.call('loginWithOTP', { phone: '+1234567890', code: '123456' })
+// Call custom method with different response modes
+await api.call('loginWithOTP', 'both', { phone: '+1234567890', code: '123456' })
+await api.call('loginWithGoogle', 'event-only', { token: 'google_token' })
+await api.call('refreshToken', 'result-only')
 ```
 
 ## Domain Allow-List
@@ -426,9 +428,10 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
 - `cancel(id)`: Cancel pending request
 
 **Authentication:**
-- `login(payload?)`: `Promise<Result<void>>`
-- `logout(payload?)`: `Promise<Result<void>>`
-- `call(method, ...args)`: `Promise<Result<void>>` - Call custom provider methods
+- `login(payload?, responseMode?)`: `Promise<Result<void>>` - Login with optional response mode (default: 'both')
+- `logout(payload?, responseMode?)`: `Promise<Result<void>>` - Logout with optional response mode (default: 'event-only')
+- `refreshToken(responseMode?)`: `Promise<Result<void>>` - Refresh access token with optional response mode
+- `call(method, responseMode?, ...args)`: `Promise<Result<void>>` - Call custom provider methods with response mode
 
 **Events:**
 - `onAuthStateChanged(callback)`: `() => void` - Subscribe to auth state changes
@@ -440,6 +443,7 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
 Types:
 
 - ApiResponse<T> = { data: T; status: number; headers: Record<string, string> }
+- AuthResponseMode = 'result-only' | 'event-only' | 'both'
 - FetchGuardRequestInit extends RequestInit with:
   - requiresAuth?: boolean // default true
   - includeHeaders?: boolean // default false
@@ -467,6 +471,14 @@ if (res.isOk()) {
 ```
 
 Grouped error helpers are exported: `GeneralErrors`, `InitErrors`, `AuthErrors`, `DomainErrors`, `NetworkErrors`, `RequestErrors`.
+
+## Auth Response Modes
+
+Auth methods support different response modes to control how results are returned and events are emitted:
+
+- `'result-only'`: Returns auth state in result, no event emission
+- `'event-only'`: Emits auth state change event, no result data  
+- `'both'`: Both returns result and emits event (recommended for login)
 
 ## Roadmap
 
