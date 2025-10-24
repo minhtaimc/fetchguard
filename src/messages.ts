@@ -69,14 +69,23 @@ export type WorkerType = keyof WorkerPayloads
 export type MessageType = MainType | WorkerType
 
 /**
- * MSG constants object - auto-generated from payload keys
+ * MSG constants object
  * Usage: MSG.SETUP, MSG.FETCH, etc.
  */
 export const MSG = Object.freeze({
-  ...Object.fromEntries(
-    (Object.keys({} as MainPayloads) as (keyof MainPayloads)[]).map(k => [k, k])
-  ),
-  ...Object.fromEntries(
-    (Object.keys({} as WorkerPayloads) as (keyof WorkerPayloads)[]).map(k => [k, k])
-  ),
+  // Main -> Worker messages
+  SETUP: 'SETUP',
+  FETCH: 'FETCH',
+  AUTH_CALL: 'AUTH_CALL',
+  CANCEL: 'CANCEL',
+  PING: 'PING',
+
+  // Worker -> Main messages
+  RESULT: 'RESULT',
+  READY: 'READY',
+  PONG: 'PONG',
+  LOG: 'LOG',
+  AUTH_STATE_CHANGED: 'AUTH_STATE_CHANGED',
+  FETCH_RESULT: 'FETCH_RESULT',
+  FETCH_ERROR: 'FETCH_ERROR'
 }) as { readonly [K in MessageType]: K }
