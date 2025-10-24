@@ -1,0 +1,29 @@
+# Source files
+src/
+old-workers/
+
+# Development files
+tsconfig.json
+tsup.config.ts
+.gitignore
+.npmignore
+
+# Documentation
+DESIGN.md
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Dependencies
+node_modules/
+
+# Build artifacts (keep dist/ for published package)
+*.tsbuildinfo

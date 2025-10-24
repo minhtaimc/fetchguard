@@ -1,0 +1,55 @@
+{
+  "name": "fetchguard",
+  "version": "1.0.0",
+  "description": "A secure fetch API library that runs in Web Workers with automatic token management",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./worker": {
+      "import": "./dist/worker.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build",
+    "prepack": "npm run build"
+  },
+  "keywords": [
+    "fetch",
+    "web-worker",
+    "token",
+    "authentication",
+    "api",
+    "proxy"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "ts-micro-result": "^2.1.10"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/fetchguard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/fetchguard/issues"
+  },
+  "homepage": "https://github.com/your-username/fetchguard#readme"
+}

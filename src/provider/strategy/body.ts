@@ -1,0 +1,55 @@
+import type { AuthStrategy } from '../../types'
+
+/**
+ * Body auth strategy - all auth operations via request body
+ * Phù hợp cho SPA applications
+ *
+ * All tokens/credentials được gửi trong request body
+ */
+export function createBodyStrategy(config: {
+  refreshUrl: string
+  loginUrl: string
+  logoutUrl: string
+}): AuthStrategy {
+  return {
+    async refresh(refreshToken) {
+      if (!refreshToken) {
+        throw new Error('No refresh token available')
+      }
+
+      return fetch(config.refreshUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+        credentials: 'include'
+      })
+    },
+
+    async login(payload) {
+      return fetch(config.loginUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        credentials: 'include'
+      })
+    },
+
+    async logout(payload) {
+      return fetch(config.logoutUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload ? JSON.stringify(payload) : undefined,
+        credentials: 'include'
+      })
+    }
+  }
+}
+
+/**
+ * Standard body strategy
+ */
+export const bodyStrategy = createBodyStrategy({
+  refreshUrl: '/auth/refresh',
+  loginUrl: '/auth/login',
+  logoutUrl: '/auth/logout'
+})
