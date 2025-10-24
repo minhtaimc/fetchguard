@@ -125,9 +125,37 @@ if (res.isOk()) {
 api.destroy()
 ```
 
+### Worker Ready State
+
+The client provides methods to check when the worker is ready:
+
+```ts
+import { createClient } from 'fetchguard'
+
+const api = createClient({ provider: { /* ... */ } })
+
+// Method 1: Check ready state (synchronous)
+if (api.ready()) {
+  console.log('Worker is ready!')
+}
+
+// Method 2: Wait for ready (async)
+await api.whenReady()
+console.log('Worker is now ready!')
+
+// Method 3: Subscribe to ready event
+const unsubscribe = api.onReady(() => {
+  console.log('Worker ready callback')
+})
+// Note: Callback is called immediately if already ready
+```
+
 ### Login / Logout
 
 ```ts
+// Wait for worker to be ready (optional but recommended)
+await api.whenReady()
+
 // Perform login; worker stores tokens and emits an auth event
 await api.login({ email: 'user@example.com', password: 'password123' })
 
@@ -368,18 +396,30 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
 - `retryCount?`: `number` - Retry failed requests (default: 3)
 - `retryDelayMs?`: `number` - Delay between retries (default: 1000)
 
-- FetchGuardClient
-  - fetch(url, options?): Result<ApiResponse<T>>
-  - get/post/put/patch/delete(...): Result<ApiResponse<T>>
-  - fetchWithId(url, options?): { id, result, cancel }
-  - cancel(id)
-  - init(payload?): Result<{ initialized: true; authenticated: boolean; expiresAt?: number | null; user?: unknown }>
-  - login(payload?): Result<void>
-  - logout(payload?): Result<void>
-  - call(method: string, ...args): Result<void> // for custom provider methods
-  - onAuthStateChanged(cb): () => void
-  - ping(): Result<{ timestamp: number }>
-  - destroy(): void
+### FetchGuardClient Methods
+
+**Ready State:**
+- `ready()`: `boolean` - Check if worker is ready (synchronous)
+- `whenReady()`: `Promise<void>` - Wait for worker to be ready
+- `onReady(callback)`: `() => void` - Subscribe to ready event (returns unsubscribe function)
+
+**HTTP Methods:**
+- `fetch(url, options?)`: `Promise<Result<ApiResponse<T>>>`
+- `get/post/put/patch/delete(...)`: `Promise<Result<ApiResponse<T>>>`
+- `fetchWithId(url, options?)`: `{ id, result, cancel }`
+- `cancel(id)`: Cancel pending request
+
+**Authentication:**
+- `login(payload?)`: `Promise<Result<void>>`
+- `logout(payload?)`: `Promise<Result<void>>`
+- `call(method, ...args)`: `Promise<Result<void>>` - Call custom provider methods
+
+**Events:**
+- `onAuthStateChanged(callback)`: `() => void` - Subscribe to auth state changes
+
+**Utilities:**
+- `ping()`: `Promise<Result<{ timestamp: number }>>` - Ping worker
+- `destroy()`: `void` - Terminate worker and cleanup
 
 Types:
 

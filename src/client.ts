@@ -38,8 +38,8 @@ export class FetchGuardClient {
     reject: (error: Error) => void
   }>()
   private authListeners = new Set<(state: { authenticated: boolean; expiresAt?: number | null; user?: unknown }) => void>()
-
-
+  private readyListeners = new Set<() => void>()
+  private isReady = false
 
   private requestQueue: QueueItem[] = []
   private isProcessingQueue = false
@@ -167,6 +167,13 @@ export class FetchGuardClient {
     }
 
     if (type === MSG.READY) {
+      this.isReady = true
+
+      // Notify ready listeners
+      for (const listener of this.readyListeners) {
+        listener()
+      }
+
       if (this.setupResolve) {
         this.setupResolve()
         this.setupResolve = undefined
@@ -364,6 +371,46 @@ export class FetchGuardClient {
     return this.call('logout', payload)
   }
 
+  /**
+   * Check if worker is ready
+   */
+  ready(): boolean {
+    return this.isReady
+  }
+
+  /**
+   * Wait for worker to be ready
+   * Returns immediately if already ready
+   */
+  async whenReady(): Promise<void> {
+    if (this.isReady) return Promise.resolve()
+
+    return new Promise<void>((resolve) => {
+      this.readyListeners.add(resolve)
+    })
+  }
+
+  /**
+   * Subscribe to ready event
+   * Callback is called immediately if already ready
+   */
+  onReady(callback: () => void): () => void {
+    if (this.isReady) {
+      // Already ready - call immediately
+      callback()
+    }
+
+    this.readyListeners.add(callback)
+
+    // Return unsubscribe function
+    return () => {
+      this.readyListeners.delete(callback)
+    }
+  }
+
+  /**
+   * Subscribe to auth state changes
+   */
   onAuthStateChanged(cb: (state: { authenticated: boolean; expiresAt?: number | null; user?: unknown }) => void): () => void {
     this.authListeners.add(cb)
     return () => this.authListeners.delete(cb)
