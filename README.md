@@ -109,7 +109,7 @@ export default defineConfig({
 ```
 
 > **Why?** FetchGuard uses Web Workers which need special handling in Vite.
-> See [VITE_SETUP.md](./VITE_SETUP.md) for detailed setup guide.
+> See [BUNDLER_SETUP.md](./BUNDLER_SETUP.md) for setup guides for all bundlers (Vite, Webpack, Next.js, etc.)
 
 ## Quick Start
 
