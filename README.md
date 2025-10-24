@@ -93,7 +93,23 @@ npm install fetchguard ts-micro-result
 # yarn add fetchguard ts-micro-result
 ```
 
-Peer dependency: `ts-micro-result`.
+**Peer dependency**: `ts-micro-result`
+
+### Vite Configuration (Important!)
+
+If using **Vite**, add this to your `vite.config.ts`:
+
+```typescript
+export default defineConfig({
+  optimizeDeps: {
+    include: ['ts-micro-result'],
+    exclude: ['fetchguard']  // Required for Web Workers
+  }
+})
+```
+
+> **Why?** FetchGuard uses Web Workers which need special handling in Vite.
+> See [VITE_SETUP.md](./VITE_SETUP.md) for detailed setup guide.
 
 ## Quick Start
 
