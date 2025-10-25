@@ -210,12 +210,18 @@ formData.append('file', file)
 formData.append('filename', 'example.txt')
 formData.append('description', 'Test upload')
 
-// Upload - FormData is automatically serialized/deserialized
+// Method 1: Using post() - Recommended for FormData
+const result = await api.post('https://api.example.com/upload', formData)
+
+// Method 2: Using fetch() with explicit method
 const result = await api.fetch('https://api.example.com/upload', {
   method: 'POST',
-  body: formData,
-  requiresAuth: true
+  body: formData
 })
+
+// Both work with put() and patch() too
+await api.put('https://api.example.com/upload/123', formData)
+await api.patch('https://api.example.com/upload/123', formData)
 
 if (result.isOk()) {
   console.log('Upload successful:', result.data)
@@ -223,12 +229,14 @@ if (result.isOk()) {
 ```
 
 **Features:**
+- ✅ Works with post(), put(), patch(), fetch() methods
 - ✅ Automatic serialization (File → ArrayBuffer → number[])
 - ✅ Multiple files supported
 - ✅ Unicode filenames preserved
 - ✅ Large files handled efficiently
 - ✅ Mixed FormData (files + strings)
 - ✅ Token security maintained
+- ✅ No manual configuration needed
 
 See [FORMDATA_SUPPORT.md](./FORMDATA_SUPPORT.md) for detailed documentation.
 
