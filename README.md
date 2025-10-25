@@ -88,12 +88,10 @@ Hardening tips:
 ## Installation
 
 ```bash
-npm install fetchguard ts-micro-result
-# pnpm add fetchguard ts-micro-result
-# yarn add fetchguard ts-micro-result
+npm install fetchguard
+# pnpm add fetchguard
+# yarn add fetchguard
 ```
-
-**Peer dependency**: `ts-micro-result`
 
 ### Vite Configuration (Important!)
 
@@ -102,7 +100,6 @@ If using **Vite**, add this to your `vite.config.ts`:
 ```typescript
 export default defineConfig({
   optimizeDeps: {
-    include: ['ts-micro-result'],
     exclude: ['fetchguard']  // Required for Web Workers
   }
 })

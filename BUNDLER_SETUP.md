@@ -22,8 +22,7 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   optimizeDeps: {
-    include: ['ts-micro-result'],  // Pre-bundle peer dependency
-    exclude: ['fetchguard']         // Don't pre-bundle (uses workers)
+    exclude: ['fetchguard']  // Don't pre-bundle (uses workers)
   },
 
   worker: {
@@ -39,10 +38,6 @@ export default defineConfig({
 - Web Workers need special handling during dev
 - Avoids bundling conflicts
 
-**`include: ['ts-micro-result']`**
-- Peer dependency should be pre-bundled
-- Better performance
-- Prevents version conflicts
 
 ### Example: React + Vite
 
@@ -54,7 +49,6 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    include: ['ts-micro-result'],
     exclude: ['fetchguard']
   }
 })
@@ -312,18 +306,10 @@ esbuild.build({
 
 ---
 
-### Issue 2: "Cannot find module 'ts-micro-result'"
-
-**Cause**: Peer dependency not installed.
-
-**Solution**:
-```bash
-npm install ts-micro-result
-```
 
 ---
 
-### Issue 3: Worker not initializing
+### Issue 2: Worker not initializing
 
 **Cause**: Worker may take time to initialize.
 
@@ -337,7 +323,7 @@ console.log('Worker is ready!')
 
 ---
 
-### Issue 4: SSR/Server-side errors
+### Issue 3: SSR/Server-side errors
 
 **Cause**: Web Workers don't exist on the server.
 
