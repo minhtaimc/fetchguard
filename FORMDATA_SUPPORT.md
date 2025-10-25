@@ -1,8 +1,8 @@
 # FormData Support in FetchGuard
 
-> **Version**: 1.2.2+
+> **Version**: 1.3.0+
 > **Date**: 2025-10-25
-> **Feature**: Automatic FormData serialization for file uploads through Web Worker
+> **Feature**: Automatic FormData and Headers serialization for Web Worker compatibility
 
 ---
 
@@ -10,13 +10,13 @@
 
 **Original Issue**: `DataCloneError: Failed to execute 'postMessage' on 'Worker': FormData/Headers object could not be cloned.`
 
-FormData and File objects cannot be transferred via `postMessage()` to Web Workers because they are not structured-cloneable. This prevented file uploads through FetchGuard.
+FormData, File, and Headers objects cannot be transferred via `postMessage()` to Web Workers because they are not structured-cloneable. This prevented file uploads and caused errors when Headers objects were used in request options.
 
 ---
 
 ## Solution
 
-FetchGuard now **automatically serializes** FormData before sending to Worker and **deserializes** it back for the actual fetch call.
+FetchGuard now **automatically serializes** both FormData and Headers before sending to Worker.
 
 ### How It Works
 
@@ -26,14 +26,20 @@ Main Thread (Client)          Web Worker
 │ FormData        │          │                  │
 │ - file: File    │ serialize│                  │
 │ - name: string  │─────────▶│ SerializedData   │
-└─────────────────┘          │ - file: number[] │
-                             │ - name: string   │
+│                 │          │ - file: number[] │
+│ Headers object  │ serialize│ - name: string   │
+│ - header: value │─────────▶│                  │
+└─────────────────┘          │ Plain object     │
+                             │ - header: value  │
                              │                  │
                              │ deserialize      │
                              │       ↓          │
                              │ FormData         │
                              │ - file: File     │
                              │ - name: string   │
+                             │                  │
+                             │ Plain headers    │
+                             │ (no conversion)  │
                              └──────────────────┘
                                       │
                                       ↓
@@ -42,15 +48,18 @@ Main Thread (Client)          Web Worker
 
 **Key Steps**:
 
-1. **Client** ([client.ts:261-264](src/client.ts#L261-L264)):
+1. **Client** ([client.ts:260-275](src/client.ts#L260-L275)):
    - Detects FormData in `body`
-   - Serializes: `File → ArrayBuffer → number[]`
+     - Serializes: `File → ArrayBuffer → number[]`
+   - Detects Headers object in `headers`
+     - Serializes: `Headers → Record<string, string>`
    - Sends serialized data via `postMessage()`
 
 2. **Worker** ([worker.ts:131-134](src/worker.ts#L131-L134)):
    - Receives serialized FormData
    - Deserializes: `number[] → ArrayBuffer → File`
    - Reconstructs FormData
+   - Uses plain headers object directly
    - Makes fetch request with real FormData
 
 3. **Browser**:

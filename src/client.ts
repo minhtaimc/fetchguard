@@ -255,12 +255,23 @@ export class FetchGuardClient {
       })
 
       try {
-        let serializedOptions = options
+        let serializedOptions = { ...options }
 
         // Serialize FormData body before sending to worker
         if (options.body && isFormData(options.body)) {
           const serializedBody = await serializeFormData(options.body)
-          serializedOptions = { ...options, body: serializedBody as any }
+          serializedOptions.body = serializedBody as any
+        }
+
+        // Serialize Headers object to plain object (Headers cannot be cloned)
+        if (options.headers) {
+          if (options.headers instanceof Headers) {
+            const plainHeaders: Record<string, string> = {}
+            options.headers.forEach((value, key) => {
+              plainHeaders[key] = value
+            })
+            serializedOptions.headers = plainHeaders
+          }
         }
 
         const message = { id, type: MSG.FETCH, payload: { url, options: serializedOptions } }
