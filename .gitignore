@@ -10,6 +10,7 @@ node_modules/
 # Project specific
 CLAUDE.md
 .claude/
+api-worker.js
 
 # Production builds
 dist/

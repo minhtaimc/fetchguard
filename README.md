@@ -16,6 +16,7 @@ FetchGuard is a secure, type-safe API client that runs your network requests ins
 - Type-safe results: powered by `ts-micro-result` (no try/catch pyramid).
 - Public endpoints: opt out per request with `requiresAuth: false`.
 - Domain allow-list: block requests to unexpected hosts (wildcards and ports supported).
+- FormData support: automatic serialization for file uploads through the Worker.
 
 ## Architecture (Simplified)
 
@@ -195,6 +196,41 @@ if (r.isOk()) {
 }
 ```
 
+### File Upload (FormData)
+
+FetchGuard automatically serializes FormData for transfer through the Web Worker:
+
+```ts
+// Create file
+const file = new File(['Hello World'], 'example.txt', { type: 'text/plain' })
+
+// Create FormData
+const formData = new FormData()
+formData.append('file', file)
+formData.append('filename', 'example.txt')
+formData.append('description', 'Test upload')
+
+// Upload - FormData is automatically serialized/deserialized
+const result = await api.fetch('https://api.example.com/upload', {
+  method: 'POST',
+  body: formData,
+  requiresAuth: true
+})
+
+if (result.isOk()) {
+  console.log('Upload successful:', result.data)
+}
+```
+
+**Features:**
+- ✅ Automatic serialization (File → ArrayBuffer → number[])
+- ✅ Multiple files supported
+- ✅ Unicode filenames preserved
+- ✅ Large files handled efficiently
+- ✅ Mixed FormData (files + strings)
+- ✅ Token security maintained
+
+See [FORMDATA_SUPPORT.md](./FORMDATA_SUPPORT.md) for detailed documentation.
 
 ### Cancellation
 
@@ -505,11 +541,31 @@ if (result.isOk()) {
 - ✅ Simple boolean instead of 3-value enum
 - ✅ Consistent API across all auth methods
 
+## Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run browser tests (includes FormData serialization)
+npm run test:browser
+
+# Run with coverage
+npm run test:coverage
+```
+
+FormData serialization is tested in [tests/browser/formdata-serialization.test.ts](./tests/browser/formdata-serialization.test.ts) with 11 test cases covering:
+- Single/multiple file uploads
+- Unicode filenames
+- Binary files
+- Large files (1MB in ~40ms)
+- Mixed FormData
+
 ## Roadmap
 
 - SSE streaming support
-- Upload progress
-- Interceptors
+- Upload progress tracking
+- Request/response interceptors
 - Advanced retries (exponential backoff)
 - Offline queueing
 

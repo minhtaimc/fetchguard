@@ -11,7 +11,10 @@ export type {
   ApiResponse,
   TokenInfo,
   WorkerConfig,
-  AuthResult
+  AuthResult,
+  SerializedFormData,
+  SerializedFile,
+  SerializedFormDataEntry
 } from './types'
 
 // Message protocol types (for advanced usage)
@@ -62,4 +65,12 @@ export {
   createCookieProvider,
   createBodyProvider
 } from './provider/presets'
+
+// FormData utilities (for advanced usage)
+export {
+  serializeFormData,
+  deserializeFormData,
+  isFormData,
+  isSerializedFormData
+} from './utils/formdata'
 

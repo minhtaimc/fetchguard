@@ -15,6 +15,7 @@ import {
 import { sendAuthStateChanged, sendAuthCallResult, sendPong, sendReady, sendResult, sendFetchResult, sendFetchError } from './worker-post'
 import { getProvider } from './utils/registry'
 import { buildProviderFromPreset } from './provider/register-presets'
+import { deserializeFormData, isSerializedFormData } from './utils/formdata'
 
 /**
  * IIFE Closure to protect sensitive tokens from external access
@@ -127,10 +128,16 @@ async function makeApiRequest(url: string, options: any = {}) {
   delete (fetchOptions as any).requiresAuth
   delete (fetchOptions as any).includeHeaders
 
+  // Deserialize FormData if present (inspired by api-worker.js:484-518)
+  if (fetchOptions.body && isSerializedFormData(fetchOptions.body)) {
+    fetchOptions.body = deserializeFormData(fetchOptions.body)
+  }
+
   const headers: Record<string, string> = {
     ...(fetchOptions.headers as Record<string, string> || {})
   }
 
+  // Don't set Content-Type for FormData - browser will set it with boundary
   if (!headers['Content-Type'] && !headers['content-type'] && fetchOptions.body) {
     if (typeof fetchOptions.body === 'object' && !(fetchOptions.body instanceof FormData) && !(fetchOptions.body instanceof URLSearchParams)) {
       headers['Content-Type'] = 'application/json'

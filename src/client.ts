@@ -15,6 +15,7 @@ import {
   DEFAULT_RETRY_DELAY_MS
 } from './constants'
 import { GeneralErrors, NetworkErrors } from './errors'
+import { serializeFormData, isFormData } from './utils/formdata'
 
 /**
  * Queue item for sequential message processing
@@ -236,7 +237,7 @@ export class FetchGuardClient {
 
   /**
    * Fetch with id for external cancellation
-   * Returns { id, result, cancel } 
+   * Returns { id, result, cancel }
    * Now uses queue system for sequential processing
    */
   fetchWithId(url: string, options: FetchGuardRequestInit = {}): {
@@ -246,20 +247,31 @@ export class FetchGuardClient {
   } {
     const id = this.generateMessageId()
 
-    const message = { id, type: MSG.FETCH, payload: { url, options } }
-
-    const result = new Promise<Result<ApiResponse>>((resolve, reject) => {
+    // Serialize FormData if present (async operation)
+    const result = new Promise<Result<ApiResponse>>(async (resolve, reject) => {
       this.pendingRequests.set(id, {
         resolve: (response) => resolve(response),
         reject: (error) => reject(error)
       })
-    })
 
-    this.sendMessageQueued(message, 30000).catch((error) => {
-      const request = this.pendingRequests.get(id)
-      if (request) {
-        this.pendingRequests.delete(id)
-        request.reject(error)
+      try {
+        let serializedOptions = options
+
+        // Serialize FormData body before sending to worker
+        if (options.body && isFormData(options.body)) {
+          const serializedBody = await serializeFormData(options.body)
+          serializedOptions = { ...options, body: serializedBody as any }
+        }
+
+        const message = { id, type: MSG.FETCH, payload: { url, options: serializedOptions } }
+
+        await this.sendMessageQueued(message, 30000)
+      } catch (error) {
+        const request = this.pendingRequests.get(id)
+        if (request) {
+          this.pendingRequests.delete(id)
+          request.reject(error instanceof Error ? error : new Error(String(error)))
+        }
       }
     })
 

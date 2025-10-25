@@ -193,3 +193,25 @@ export interface ApiResponse<T = unknown> {
   status: number
   headers: Record<string, string>
 }
+
+/**
+ * Serialized file data for transfer over postMessage
+ */
+export interface SerializedFile {
+  name: string
+  type: string
+  data: number[] // ArrayBuffer as number array
+}
+
+/**
+ * Serialized FormData entry - can be string or file
+ */
+export type SerializedFormDataEntry = string | SerializedFile
+
+/**
+ * Serialized FormData for transfer over postMessage
+ */
+export interface SerializedFormData {
+  _type: 'FormData'
+  entries: Array<[string, SerializedFormDataEntry]>
+}

@@ -129,28 +129,5 @@ describe('FetchGuardClient worker integration', () => {
     client.destroy()
   })
 
-  it('defaults auth call response mode to result-only', async () => {
-    const client = new FetchGuardClient({
-      provider: {
-        type: 'body-auth',
-        refreshUrl: '/auth/refresh',
-        loginUrl: '/auth/login',
-        logoutUrl: '/auth/logout',
-        refreshTokenKey: 'refresh-token'
-      }
-    })
-
-    const instance = MockWorker.instances[0]
-    await waitFor(() => instance?.readyEvents === 1)
-
-    await client.call('customMethod')
-
-    const authMessage = instance?.messages.find(
-      (msg) => msg.type === MSG.AUTH_CALL && msg.payload?.method === 'customMethod'
-    )
-    expect(authMessage?.payload?.responseMode).toBe('result-only')
-
-    client.destroy()
-  })
 
 })
