@@ -311,6 +311,16 @@ export class FetchGuardClient {
   }
 
   async post(url: string, body?: any, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
+    // If body is FormData, use fetch directly (no JSON.stringify)
+    if (body && isFormData(body)) {
+      return this.fetch(url, {
+        ...options,
+        method: 'POST',
+        body
+      })
+    }
+
+    // For non-FormData body, use JSON
     const headers = new Headers(options.headers)
 
     // Set Content-Type if not already set and body is being stringified
@@ -327,6 +337,16 @@ export class FetchGuardClient {
   }
 
   async put(url: string, body?: any, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
+    // If body is FormData, use fetch directly (no JSON.stringify)
+    if (body && isFormData(body)) {
+      return this.fetch(url, {
+        ...options,
+        method: 'PUT',
+        body
+      })
+    }
+
+    // For non-FormData body, use JSON
     const headers = new Headers(options.headers)
 
     // Set Content-Type if not already set and body is being stringified
@@ -347,6 +367,16 @@ export class FetchGuardClient {
   }
 
   async patch(url: string, body?: any, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
+    // If body is FormData, use fetch directly (no JSON.stringify)
+    if (body && isFormData(body)) {
+      return this.fetch(url, {
+        ...options,
+        method: 'PATCH',
+        body
+      })
+    }
+
+    // For non-FormData body, use JSON
     const headers = new Headers(options.headers)
 
     // Set Content-Type if not already set and body is being stringified
