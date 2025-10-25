@@ -1,6 +1,6 @@
 {
   "name": "fetchguard",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A secure fetch API library that runs in Web Workers with automatic token management",
   "type": "module",
   "main": "dist/index.js",
@@ -42,19 +42,18 @@
   ],
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "ts-micro-result": "^2.1.10"
+  },
   "devDependencies": {
     "@vitest/browser": "^4.0.2",
     "@vitest/browser-playwright": "^4.0.2",
     "@vitest/ui": "^4.0.2",
     "happy-dom": "^20.0.8",
     "playwright": "^1.45.1",
-    "ts-micro-result": "^2.1.10",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
     "vitest": "^4.0.2"
-  },
-  "peerDependencies": {
-    "ts-micro-result": "^2.1.10"
   },
   "engines": {
     "node": ">=16.0.0"
