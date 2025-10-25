@@ -11,7 +11,7 @@ export type {
   ApiResponse,
   TokenInfo,
   WorkerConfig,
-  AuthResponseMode
+  AuthResult
 } from './types'
 
 // Message protocol types (for advanced usage)

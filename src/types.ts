@@ -11,15 +11,34 @@ import type { Result } from 'ts-micro-result'
 
 /**
  * Token info returned from provider
+ *
+ * All fields are optional to support various custom auth methods:
+ * - Standard login/refresh: returns token + optional fields
+ * - Update user info: may only return user (no token update)
+ * - Verify OTP: may return nothing (just validation)
+ * - Custom auth flows: flexible field combinations
  */
 export interface TokenInfo {
-  token: string
-  expiresAt?: number
-  refreshToken?: string
+  token?: string | null
+  expiresAt?: number | null
+  refreshToken?: string | null
   user?: unknown
 }
 
-export type AuthResponseMode = 'result-only' | 'event-only' | 'both'
+/**
+ * Auth result returned from auth operations and auth state changes
+ * Used by: login(), logout(), refreshToken(), onAuthStateChanged()
+ */
+export interface AuthResult {
+  /** Whether user is authenticated (has valid non-expired token) */
+  authenticated: boolean
+
+  /** User info from token (if available) */
+  user?: unknown
+
+  /** Token expiry timestamp in milliseconds (if available) */
+  expiresAt?: number | null
+}
 
 /**
  * Interface for token provider

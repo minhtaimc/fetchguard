@@ -1,5 +1,5 @@
 import type { SerializedResult } from 'ts-micro-result'
-import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig, AuthResponseMode } from './types'
+import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig, AuthResult } from './types'
 
 /**
  * MESSAGE PAYLOADS - SINGLE SOURCE OF TRUTH
@@ -27,7 +27,7 @@ import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig, AuthRes
 export interface MainPayloads {
   SETUP: { config: WorkerConfig; providerConfig: ProviderPresetConfig | string | null }
   FETCH: { url: string; options?: FetchGuardRequestInit }
-  AUTH_CALL: { method: string; args: unknown[]; responseMode?: AuthResponseMode }  // Generic auth method call (login, logout, loginWithPhone, etc.)
+  AUTH_CALL: { method: string; args: unknown[]; emitEvent?: boolean }  // Generic auth method call (login, logout, loginWithPhone, etc.)
   CANCEL: undefined
   PING: { timestamp: number }
 }
@@ -40,7 +40,8 @@ export interface WorkerPayloads {
   READY: undefined
   PONG: { timestamp: number }
   LOG: { level: 'info' | 'warn' | 'error'; message: string }
-  AUTH_STATE_CHANGED: { authenticated: boolean; expiresAt?: number | null; user?: unknown }
+  AUTH_STATE_CHANGED: AuthResult
+  AUTH_CALL_RESULT: AuthResult
   FETCH_RESULT: { status: number; headers?: Record<string, string>; body: string }
   FETCH_ERROR: { error: string; status?: number }
 }
@@ -86,6 +87,7 @@ export const MSG = Object.freeze({
   PONG: 'PONG',
   LOG: 'LOG',
   AUTH_STATE_CHANGED: 'AUTH_STATE_CHANGED',
+  AUTH_CALL_RESULT: 'AUTH_CALL_RESULT',
   FETCH_RESULT: 'FETCH_RESULT',
   FETCH_ERROR: 'FETCH_ERROR'
 }) as { readonly [K in MessageType]: K }

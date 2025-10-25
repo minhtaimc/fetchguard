@@ -112,7 +112,7 @@ export function createProvider(config: ProviderConfig): TokenProvider {
           token: '',
           refreshToken: undefined,
           expiresAt: undefined,
-          user: undefined
+          user: null  // Explicitly clear user on logout
         })
       } catch (error) {
         return err(NetworkErrors.NetworkError({ message: String(error) }))

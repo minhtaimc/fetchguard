@@ -4,7 +4,7 @@ import type {
   WorkerConfig,
   ApiResponse,
   ProviderPresetConfig,
-  AuthResponseMode
+  AuthResult
 } from './types'
 import { fromJSON, ok, err, type Result } from 'ts-micro-result'
 import { MSG } from './messages'
@@ -38,7 +38,7 @@ export class FetchGuardClient {
     resolve: (value: any) => void
     reject: (error: Error) => void
   }>()
-  private authListeners = new Set<(state: { authenticated: boolean; expiresAt?: number | null; user?: unknown }) => void>()
+  private authListeners = new Set<(state: AuthResult) => void>()
   private readyListeners = new Set<() => void>()
   private isReady = false
 
@@ -193,9 +193,18 @@ export class FetchGuardClient {
     }
 
     if (type === MSG.AUTH_STATE_CHANGED) {
-    for (const cb of this.authListeners) cb(payload)
-    return
-  }
+      for (const cb of this.authListeners) cb(payload)
+      return
+    }
+
+    if (type === MSG.AUTH_CALL_RESULT) {
+      const request = this.pendingRequests.get(id)
+      if (request) {
+        this.pendingRequests.delete(id)
+        request.resolve(ok(payload)) // payload is AuthResult
+      }
+      return
+    }
   }
 
   /**
@@ -333,12 +342,13 @@ export class FetchGuardClient {
   /**
    * Generic method to call any auth method on provider
    * @param method - Method name (login, logout, loginWithPhone, etc.)
+   * @param emitEvent - Whether to emit AUTH_STATE_CHANGED event (default: true)
    * @param args - Arguments to pass to the method
-   * @returns Result base on responseMode
+   * @returns Promise<Result<AuthResult>> - Always returns AuthResult
    */
-  async call(method: string, responseMode?: AuthResponseMode, ...args: unknown[]): Promise<Result<void>> {
+  async call(method: string, emitEvent?: boolean, ...args: unknown[]): Promise<Result<AuthResult>> {
     const id = this.generateMessageId()
-    const message = { id, type: MSG.AUTH_CALL, payload: { method, args, responseMode } }
+    const message = { id, type: MSG.AUTH_CALL, payload: { method, args, emitEvent } }
 
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(id, {
@@ -359,25 +369,30 @@ export class FetchGuardClient {
 
   /**
    * Convenience wrapper for login
+   * @param payload - Login credentials
+   * @param emitEvent - Whether to emit AUTH_STATE_CHANGED event (default: true)
    */
-  async login(payload?: unknown, responseMode: AuthResponseMode = 'both'): Promise<Result<void>> {
+  async login(payload?: unknown, emitEvent: boolean = true): Promise<Result<AuthResult>> {
     const args = typeof payload === 'undefined' ? [] : [payload]
-    return this.call('login', responseMode, args)
+    return this.call('login', emitEvent, ...args)
   }
 
   /**
    * Convenience wrapper for logout
+   * @param payload - Optional logout payload
+   * @param emitEvent - Whether to emit AUTH_STATE_CHANGED event (default: true)
    */
-  async logout(payload?: unknown, responseMode: AuthResponseMode = 'event-only'): Promise<Result<void>> {
+  async logout(payload?: unknown, emitEvent: boolean = true): Promise<Result<AuthResult>> {
     const args = typeof payload === 'undefined' ? [] : [payload]
-    return this.call('logout', responseMode, args)
+    return this.call('logout', emitEvent, ...args)
   }
 
   /**
    * Convenience wrapper for refreshToken
+   * @param emitEvent - Whether to emit AUTH_STATE_CHANGED event (default: true)
    */
-  async refreshToken(responseMode?: AuthResponseMode): Promise<Result<void>> {
-    return this.call('refreshToken', responseMode, [])
+  async refreshToken(emitEvent: boolean = true): Promise<Result<AuthResult>> {
+    return this.call('refreshToken', emitEvent)
   }
 
   /**
@@ -420,7 +435,7 @@ export class FetchGuardClient {
   /**
    * Subscribe to auth state changes
    */
-  onAuthStateChanged(cb: (state: { authenticated: boolean; expiresAt?: number | null; user?: unknown }) => void): () => void {
+  onAuthStateChanged(cb: (state: AuthResult) => void): () => void {
     this.authListeners.add(cb)
     return () => this.authListeners.delete(cb)
   }

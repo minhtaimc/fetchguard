@@ -5,6 +5,7 @@
 
 import type { WorkerToMainMessage } from './messages'
 import type { Result } from 'ts-micro-result'
+import type { AuthResult } from './types'
 import { MSG } from './messages'
 
 /**
@@ -71,10 +72,21 @@ export function sendPong(id: string, timestamp: number): void {
 /**
  * Send AUTH_STATE_CHANGED event
  */
-export function sendAuthStateChanged(authenticated: boolean, expiresAt?: number | null, user?: unknown): void {
+export function sendAuthStateChanged(authResult: AuthResult): void {
   post({
     type: MSG.AUTH_STATE_CHANGED,
     id: `evt_${Date.now()}`,
-    payload: { authenticated, expiresAt, user }
+    payload: authResult
+  } as any)
+}
+
+/**
+ * Send AUTH_CALL_RESULT (auth method result)
+ */
+export function sendAuthCallResult(id: string, authResult: AuthResult): void {
+  post({
+    type: MSG.AUTH_CALL_RESULT,
+    id,
+    payload: authResult
   } as any)
 }

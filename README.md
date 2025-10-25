@@ -372,10 +372,10 @@ const myProvider = createProvider({
 registerProvider('otp-auth', myProvider)
 const api = createClient({ provider: 'otp-auth' })
 
-// Call custom method with different response modes
-await api.call('loginWithOTP', 'both', { phone: '+1234567890', code: '123456' })
-await api.call('loginWithGoogle', 'event-only', { token: 'google_token' })
-await api.call('refreshToken', 'result-only')
+// Call custom method with event emission
+await api.call('loginWithOTP', true, { phone: '+1234567890', code: '123456' })
+await api.call('loginWithGoogle', false, { token: 'google_token' })  // Silent
+await api.call('refreshToken', true)  // With event
 ```
 
 ## Domain Allow-List
@@ -428,10 +428,10 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
 - `cancel(id)`: Cancel pending request
 
 **Authentication:**
-- `login(payload?, responseMode?)`: `Promise<Result<void>>` - Login with optional response mode (default: 'both')
-- `logout(payload?, responseMode?)`: `Promise<Result<void>>` - Logout with optional response mode (default: 'event-only')
-- `refreshToken(responseMode?)`: `Promise<Result<void>>` - Refresh access token with optional response mode
-- `call(method, responseMode?, ...args)`: `Promise<Result<void>>` - Call custom provider methods with response mode
+- `login(payload?, emitEvent?)`: `Promise<Result<AuthResult>>` - Login with optional event emission (default: true)
+- `logout(payload?, emitEvent?)`: `Promise<Result<AuthResult>>` - Logout with optional event emission (default: true)
+- `refreshToken(emitEvent?)`: `Promise<Result<AuthResult>>` - Refresh access token with optional event emission (default: true)
+- `call(method, emitEvent?, ...args)`: `Promise<Result<AuthResult>>` - Call custom provider methods with event emission
 
 **Events:**
 - `onAuthStateChanged(callback)`: `() => void` - Subscribe to auth state changes
@@ -443,7 +443,7 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
 Types:
 
 - ApiResponse<T> = { data: T; status: number; headers: Record<string, string> }
-- AuthResponseMode = 'result-only' | 'event-only' | 'both'
+- AuthResult = { authenticated: boolean; user?: unknown; expiresAt?: number | null }
 - FetchGuardRequestInit extends RequestInit with:
   - requiresAuth?: boolean // default true
   - includeHeaders?: boolean // default false
@@ -472,13 +472,41 @@ if (res.isOk()) {
 
 Grouped error helpers are exported: `GeneralErrors`, `InitErrors`, `AuthErrors`, `DomainErrors`, `NetworkErrors`, `RequestErrors`.
 
-## Auth Response Modes
+## Auth Methods and Events
 
-Auth methods support different response modes to control how results are returned and events are emitted:
+### AuthResult Return Value
 
-- `'result-only'`: Returns auth state in result, no event emission
-- `'event-only'`: Emits auth state change event, no result data  
-- `'both'`: Both returns result and emits event (recommended for login)
+All auth methods (`login`, `logout`, `refreshToken`, `call`) now return `Promise<Result<AuthResult>>`:
+
+```ts
+interface AuthResult {
+  authenticated: boolean  // Is user authenticated?
+  user?: unknown         // User info (if available)
+  expiresAt?: number | null  // Token expiry timestamp
+}
+```
+
+### Event Emission Control
+
+The `emitEvent` parameter controls whether `AUTH_STATE_CHANGED` event is emitted:
+
+```ts
+// Emit event (default - updates UI)
+await api.login(credentials, true)
+await api.login(credentials)  // Same as above
+
+// Silent (no event - useful for checks)
+const result = await api.refreshToken(false)
+if (result.isOk()) {
+  const { authenticated, expiresAt } = result.data
+  // Check state without triggering listeners
+}
+```
+
+**Benefits:**
+- ✅ Always get `AuthResult` back (no void)
+- ✅ Simple boolean instead of 3-value enum
+- ✅ Consistent API across all auth methods
 
 ## Roadmap
 

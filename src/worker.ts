@@ -12,7 +12,7 @@ import {
   RequestErrors,
   GeneralErrors
 } from './errors'
-import { sendAuthStateChanged, sendPong, sendReady, sendResult, sendFetchResult, sendFetchError } from './worker-post'
+import { sendAuthStateChanged, sendAuthCallResult, sendPong, sendReady, sendResult, sendFetchResult, sendFetchError } from './worker-post'
 import { getProvider } from './utils/registry'
 import { buildProviderFromPreset } from './provider/register-presets'
 
@@ -172,12 +172,35 @@ async function makeApiRequest(url: string, options: any = {}) {
 
 /**
  * Update token state from TokenInfo and auto emit AUTH_STATE_CHANGED
+ *
+ * Smart update logic for ALL fields:
+ * - Only update field if key exists in tokenInfo
+ * - If key exists with value: update to that value (including null)
+ * - If key doesn't exist: preserve existing value
+ *
+ * This allows flexible custom auth methods:
+ * - Standard login/refresh: returns { token, user, expiresAt }
+ * - Update user info: may only return { user: {...} } (no token change)
+ * - Verify OTP: may return {} (just validation, no state change)
+ * - Logout: returns { token: null, user: null, ... } to clear all
  */
-function setTokenState(tokenInfo: { token: string | null; expiresAt?: number | null; user?: unknown; refreshToken?: string }, emitEvent: boolean = true) {
-  accessToken = tokenInfo.token
-  expiresAt = tokenInfo.expiresAt ?? null
-  currentUser = tokenInfo.user
-  refreshToken = tokenInfo.refreshToken ?? null
+function setTokenState(tokenInfo: { token?: string | null; expiresAt?: number | null; user?: unknown; refreshToken?: string | null }, emitEvent: boolean = true) {
+  // Apply smart preservation to ALL fields
+  if ('token' in tokenInfo) {
+    accessToken = tokenInfo.token ?? null
+  }
+
+  if ('expiresAt' in tokenInfo) {
+    expiresAt = tokenInfo.expiresAt ?? null
+  }
+
+  if ('user' in tokenInfo) {
+    currentUser = tokenInfo.user
+  }
+
+  if ('refreshToken' in tokenInfo) {
+    refreshToken = tokenInfo.refreshToken ?? null
+  }
 
   if (emitEvent) {
     postAuthChanged()
@@ -191,7 +214,11 @@ function setTokenState(tokenInfo: { token: string | null; expiresAt?: number | n
 function postAuthChanged() {
   const now = Date.now()
   const authenticated = accessToken !== null && accessToken !== '' && (expiresAt === null || expiresAt > now)
-  sendAuthStateChanged(authenticated, expiresAt, currentUser)
+  sendAuthStateChanged({
+    authenticated,
+    expiresAt,
+    user: currentUser
+  })
 }
 
 /**
@@ -257,8 +284,8 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
     case MSG.AUTH_CALL: {
       const { id, payload } = data
       try {
-        const { method, args, responseMode } = payload
-        const mode = responseMode ?? 'result-only'
+        const { method, args, emitEvent } = payload
+        const shouldEmitEvent = emitEvent ?? true // Default: emit event
 
         if (typeof provider[method] !== 'function') {
           sendResult(id, err(GeneralErrors.Unexpected({ message: `Method '${method}' not found on provider` })))
@@ -273,28 +300,19 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
 
         const tokenInfo = result.data
 
-        const shouldEmitEvent = mode !== 'result-only'
-        const shouldSendResult = mode !== 'event-only'
-
+        // Update token state and optionally emit event
         setTokenState(tokenInfo, shouldEmitEvent)
 
-        if (shouldSendResult) {
-          const now = Date.now()
-          const authenticated =
-            accessToken !== null && accessToken !== '' && (expiresAt === null || expiresAt > now)
+        // Always send AuthResult back
+        const now = Date.now()
+        const authenticated =
+          accessToken !== null && accessToken !== '' && (expiresAt === null || expiresAt > now)
 
-          sendResult(
-            id,
-            ok({
-              authenticated,
-              expiresAt,
-              user: currentUser
-            })
-          )
-        }
-        else{
-          sendResult(id, ok(undefined))
-        }
+        sendAuthCallResult(id, {
+          authenticated,
+          expiresAt,
+          user: currentUser
+        })
       } catch (error) {
         sendResult(id, err(GeneralErrors.Unexpected({ message: error instanceof Error ? error.message : String(error) })))
       }
