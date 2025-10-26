@@ -7,6 +7,7 @@ import { MSG } from './messages'
 import { DEFAULT_REFRESH_EARLY_MS } from './constants'
 import {
   InitErrors,
+  AuthErrors,
   DomainErrors,
   NetworkErrors,
   RequestErrors,
@@ -56,10 +57,13 @@ async function ensureValidToken(): Promise<Result<string | null>> {
     return ok(accessToken)
   }
 
+  let refreshError: Result<unknown> | null = null
+
   refreshPromise = (async () => {
     try {
       // Provider already checked above, TypeScript needs assertion
       if (!provider) {
+        refreshError = err(InitErrors.NotInitialized())
         return
       }
 
@@ -67,11 +71,13 @@ async function ensureValidToken(): Promise<Result<string | null>> {
 
       if (valueRes.isError()) {
         setTokenState({ token: null, expiresAt: null, user: undefined, refreshToken: undefined })
+        refreshError = valueRes
         return
       }
 
       const tokenInfo = valueRes.data
       if (!tokenInfo) {
+        refreshError = err(AuthErrors.TokenRefreshFailed({ message: 'Provider returned null token info' }))
         return
       }
 
@@ -82,6 +88,12 @@ async function ensureValidToken(): Promise<Result<string | null>> {
   })()
 
   await refreshPromise
+
+  // Return error if refresh failed
+  if (refreshError) {
+    return refreshError as Result<string | null>
+  }
+
   return ok(accessToken)
 }
 
