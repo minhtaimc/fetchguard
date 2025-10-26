@@ -1,5 +1,5 @@
 import type { SerializedResult } from 'ts-micro-result'
-import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig, AuthResult } from './types'
+import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig, AuthResult, ApiResponse } from './types'
 
 /**
  * MESSAGE PAYLOADS - SINGLE SOURCE OF TRUTH
@@ -42,7 +42,7 @@ export interface WorkerPayloads {
   LOG: { level: 'info' | 'warn' | 'error'; message: string }
   AUTH_STATE_CHANGED: AuthResult
   AUTH_CALL_RESULT: AuthResult
-  FETCH_RESULT: { status: number; headers?: Record<string, string>; body: string }
+  FETCH_RESULT: ApiResponse
   FETCH_ERROR: { error: string; status?: number }
 }
 

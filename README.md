@@ -449,11 +449,7 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
   - Config object: `{ type: 'cookie-auth' | 'body-auth', refreshUrl, loginUrl, logoutUrl, ... }`
   - String: Registered provider name
 - `allowedDomains?`: `string[]` - Domain whitelist (supports wildcards)
-- `debug?`: `boolean` - Enable debug logging in worker
 - `refreshEarlyMs?`: `number` - Refresh token X ms before expiry (default: 60000)
-- `defaultTimeoutMs?`: `number` - Request timeout (default: 120000)
-- `retryCount?`: `number` - Retry failed requests (default: 3)
-- `retryDelayMs?`: `number` - Delay between retries (default: 1000)
 
 ### FetchGuardClient Methods
 
@@ -463,8 +459,8 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
 - `onReady(callback)`: `() => void` - Subscribe to ready event (returns unsubscribe function)
 
 **HTTP Methods:**
-- `fetch(url, options?)`: `Promise<Result<ApiResponse<T>>>`
-- `get/post/put/patch/delete(...)`: `Promise<Result<ApiResponse<T>>>`
+- `fetch(url, options?)`: `Promise<Result<ApiResponse>>`
+- `get/post/put/patch/delete(...)`: `Promise<Result<ApiResponse>>`
 - `fetchWithId(url, options?)`: `{ id, result, cancel }`
 - `cancel(id)`: Cancel pending request
 
@@ -483,7 +479,11 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
 
 Types:
 
-- ApiResponse<T> = { data: T; status: number; headers: Record<string, string> }
+- ApiResponse = { body: string; status: number; contentType: string; headers: Record<string, string> }
+  - `body`: Raw string (text/JSON) or base64 (for binary content like images, PDFs)
+  - `contentType`: Content type header (always present, e.g., 'application/json', 'image/png')
+  - Use `isBinaryContentType(contentType)` to detect binary responses
+  - Use `base64ToArrayBuffer(body)` to decode binary data
 - AuthResult = { authenticated: boolean; user?: unknown; expiresAt?: number | null }
 - FetchGuardRequestInit extends RequestInit with:
   - requiresAuth?: boolean // default true

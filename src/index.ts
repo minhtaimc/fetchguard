@@ -74,3 +74,9 @@ export {
   isSerializedFormData
 } from './utils/formdata'
 
+// Binary utilities (for decoding binary responses)
+export {
+  base64ToArrayBuffer,
+  isBinaryContentType
+} from './utils/binary'
+

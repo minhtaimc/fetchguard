@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import type { WorkerConfig } from './types'
+import type { WorkerConfig, ApiResponse } from './types'
 import type { MainToWorkerMessage } from './messages'
 import { ok, err, type Result } from 'ts-micro-result'
 import { MSG } from './messages'
@@ -16,6 +16,7 @@ import { sendAuthStateChanged, sendAuthCallResult, sendPong, sendReady, sendResu
 import { getProvider } from './utils/registry'
 import { buildProviderFromPreset } from './provider/register-presets'
 import { deserializeFormData, isSerializedFormData } from './utils/formdata'
+import { arrayBufferToBase64, isBinaryContentType } from './utils/binary'
 
 /**
  * IIFE Closure to protect sensitive tokens from external access
@@ -113,7 +114,7 @@ function validateDomain(url: string): boolean {
 /**
  * Make API request with proactive token management
  */
-async function makeApiRequest(url: string, options: any = {}) {
+async function makeApiRequest(url: string, options: any = {}): Promise<Result<ApiResponse>> {
   if (!config) {
     return err(InitErrors.NotInitialized())
   }
@@ -146,7 +147,10 @@ async function makeApiRequest(url: string, options: any = {}) {
 
   if (requiresAuth) {
     const tokenRes = await ensureValidToken()
-    if (tokenRes.isError()) return tokenRes
+    if (tokenRes.isError()) {
+      // Propagate error - cast to correct return type
+      return err(tokenRes.errors)
+    }
 
     const token = tokenRes.data
     if (token) {
@@ -154,26 +158,41 @@ async function makeApiRequest(url: string, options: any = {}) {
     }
   }
 
-  let response: Response | null = null
-  let networkErr: Result<never> | null = null
-  response = await fetch(url, { ...fetchOptions, headers, credentials: 'include' }).catch((e) => {
+  let response: Response
+  try {
+    response = await fetch(url, { ...fetchOptions, headers, credentials: 'include' })
+  } catch (e) {
     const aborted = (e && (e as any).name === 'AbortError')
-    networkErr = aborted ? err(RequestErrors.Cancelled()) : err(NetworkErrors.NetworkError({ message: String(e) }))
-    return null as any
-  })
-  if (!response) return (networkErr ?? err(NetworkErrors.NetworkError({ message: 'Unknown network error' })))
+    return aborted
+      ? err(RequestErrors.Cancelled())
+      : err(NetworkErrors.NetworkError({ message: String(e) }))
+  }
 
-  const body = await response.text()
-  let responseHeaders: Record<string, string> | undefined
+  // Extract content-type (always needed for binary detection)
+  const contentType = response.headers.get('content-type') || 'application/octet-stream'
+
+  // Determine if response is binary
+  const isBinary = isBinaryContentType(contentType)
+
+  // Get body as text or base64
+  let body: string
+  if (isBinary) {
+    const buffer = await response.arrayBuffer()
+    body = arrayBufferToBase64(buffer)
+  } else {
+    body = await response.text()
+  }
+
+  // Extract headers if requested
+  const responseHeaders: Record<string, string> = {}
   if (includeHeaders) {
-    responseHeaders = {}
     response.headers.forEach((value, key) => {
-      (responseHeaders as Record<string, string>)[key] = value
+      responseHeaders[key] = value
     })
   }
 
   return response.ok
-    ? ok({ body, status: response.status, headers: responseHeaders })
+    ? ok({ body, status: response.status, contentType, headers: responseHeaders })
     : err(NetworkErrors.HttpError({ message: `HTTP ${response.status}: ${body}` }))
 }
 
@@ -270,9 +289,8 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         const merged: RequestInit = { ...(options || {}), signal: controller.signal }
         const result = await makeApiRequest(url, merged)
 
-        if (result.isOk()) {
-          const response = result.data as { body: string; status: number; headers?: Record<string, string> }
-          sendFetchResult(id, response.status, response.body, response.headers)
+        if (result.isOkWithData()) {
+          sendFetchResult(id, result.data)
         } else {
           const error = result.errors?.[0]
           const message = error?.message || 'Unknown error'
@@ -335,9 +353,7 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
           pendingControllers.delete(id)
         }
       } catch (error) {
-        if (config?.debug) {
-          console.error('CANCEL error:', error)
-        }
+        // Silently ignore cancel errors
       }
       break
     }

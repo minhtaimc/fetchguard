@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-10-26
+
+### Added
+
+- **Binary Response Support** - Auto base64 encoding for binary content
+  - `contentType` field added to `ApiResponse` - always present, indicates content type
+  - Worker auto-detects binary responses (images, PDFs, videos, etc.)
+  - Binary data automatically encoded as base64 for safe transfer through postMessage
+  - New utilities: `base64ToArrayBuffer()`, `isBinaryContentType()`
+  - Example: [example/binary-response.ts](./example/binary-response.ts)
+
+- **Type Safety Improvements**
+  - Added explicit return type to `makeApiRequest()`: `Promise<Result<ApiResponse>>`
+  - Removed anti-pattern `return null as any` in favor of proper try-catch
+  - Refactored `sendFetchResult()` to accept `ApiResponse` object instead of multiple params
+
+### Changed
+
+- **ApiResponse Structure** - Now includes `contentType` field
+  ```typescript
+  interface ApiResponse {
+    body: string          // Text/JSON or base64 (for binary)
+    status: number
+    contentType: string   // Always present (e.g., 'application/json', 'image/png')
+    headers: Record<string, string>
+  }
+  ```
+
+### Removed
+
+- **BREAKING**: Removed unused configuration options
+  - `debug` option (not used in production, use browser DevTools instead)
+  - `defaultTimeoutMs` option (timeout should be handled at request level)
+  - `retryCount` option (not implemented, proactive token refresh prevents most failures)
+  - `retryDelayMs` option (not implemented)
+  - Removed constants: `DEFAULT_TIMEOUT_MS`, `DEFAULT_RETRY_COUNT`, `DEFAULT_RETRY_DELAY_MS`
+
+### Migration Guide
+
+**Binary Responses:**
+```typescript
+import { base64ToArrayBuffer, isBinaryContentType } from 'fetchguard'
+
+const result = await api.get('/image.png')
+if (result.ok) {
+  const { body, contentType } = result.value
+
+  if (isBinaryContentType(contentType)) {
+    // Decode base64 to binary
+    const arrayBuffer = base64ToArrayBuffer(body)
+    const blob = new Blob([arrayBuffer], { type: contentType })
+    const url = URL.createObjectURL(blob)
+  } else {
+    // Parse text/JSON
+    const data = JSON.parse(body)
+  }
+}
+```
+
+**Removed Options:**
+```typescript
+// Before (v1.3.x)
+const api = createClient({
+  provider: { ... },
+  debug: true,              // ❌ Removed
+  defaultTimeoutMs: 30000,  // ❌ Removed
+  retryCount: 3,            // ❌ Removed
+  retryDelayMs: 1000        // ❌ Removed
+})
+
+// After (v1.4.0)
+const api = createClient({
+  provider: { ... },
+  // Only these options remain:
+  allowedDomains: ['api.example.com'],
+  refreshEarlyMs: 60000
+})
+```
+
 ## [1.2.0] - 2025-10-25
 
 ### Added

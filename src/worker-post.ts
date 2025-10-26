@@ -5,7 +5,7 @@
 
 import type { WorkerToMainMessage } from './messages'
 import type { Result } from 'ts-micro-result'
-import type { AuthResult } from './types'
+import type { AuthResult, ApiResponse } from './types'
 import { MSG } from './messages'
 
 /**
@@ -29,11 +29,11 @@ export function sendResult(id: string, result: Result<any>): void {
 /**
  * Send successful fetch response
  */
-export function sendFetchResult(id: string, status: number, body: string, headers?: Record<string, string>): void {
+export function sendFetchResult(id: string, response: ApiResponse): void {
   post({
     type: MSG.FETCH_RESULT,
     id,
-    payload: headers ? ({ status, body, headers }) : ({ status, body })
+    payload: response
   } as any)
 }
 

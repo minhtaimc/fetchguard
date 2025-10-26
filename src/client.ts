@@ -8,12 +8,7 @@ import type {
 } from './types'
 import { fromJSON, ok, err, type Result } from 'ts-micro-result'
 import { MSG } from './messages'
-import {
-  DEFAULT_REFRESH_EARLY_MS,
-  DEFAULT_TIMEOUT_MS,
-  DEFAULT_RETRY_COUNT,
-  DEFAULT_RETRY_DELAY_MS
-} from './constants'
+import { DEFAULT_REFRESH_EARLY_MS } from './constants'
 import { GeneralErrors, NetworkErrors } from './errors'
 import { serializeFormData, isFormData } from './utils/formdata'
 
@@ -66,11 +61,7 @@ export class FetchGuardClient {
   private async initializeWorker(options: FetchGuardOptions): Promise<void> {
     const config: WorkerConfig = {
       allowedDomains: options.allowedDomains || [],
-      debug: options.debug || false,
-      refreshEarlyMs: options.refreshEarlyMs ?? DEFAULT_REFRESH_EARLY_MS,
-      defaultTimeoutMs: options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS,
-      retryCount: options.retryCount ?? DEFAULT_RETRY_COUNT,
-      retryDelayMs: options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS
+      refreshEarlyMs: options.refreshEarlyMs ?? DEFAULT_REFRESH_EARLY_MS
     }
 
     // Serialize provider config based on type
@@ -134,9 +125,8 @@ export class FetchGuardClient {
         const status = payload?.status ?? 200
         const headers = payload?.headers ?? {}
         const body = String(payload?.body ?? '')
-        let data: any
-        try { data = JSON.parse(body) } catch { data = body }
-        request.resolve(ok<ApiResponse>({ data, status, headers }))
+        const contentType = String(payload?.contentType ?? 'application/octet-stream')
+        request.resolve(ok<ApiResponse>({ body, status, contentType, headers }))
         return
       }
 

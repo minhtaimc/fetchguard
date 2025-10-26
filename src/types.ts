@@ -147,20 +147,8 @@ export interface FetchGuardOptions {
   /** List of allowed domains (wildcard supported) */
   allowedDomains?: string[]
 
-  /** Debug mode */
-  debug?: boolean
-
   /** Early refresh time for tokens (ms) */
   refreshEarlyMs?: number
-
-  /** Default timeout for requests (ms) */
-  defaultTimeoutMs?: number
-
-  /** Default retry count */
-  retryCount?: number
-
-  /** Delay between retries (ms) */
-  retryDelayMs?: number
 }
 
 /**
@@ -168,11 +156,7 @@ export interface FetchGuardOptions {
  */
 export interface WorkerConfig {
   allowedDomains: string[]
-  debug: boolean
   refreshEarlyMs: number
-  defaultTimeoutMs: number
-  retryCount: number
-  retryDelayMs: number
 }
 
 /**
@@ -186,11 +170,16 @@ export interface FetchGuardRequestInit extends RequestInit {
 }
 
 /**
- * API response wrapper
+ * API response structure
+ * - body: string (text/JSON) or base64 (binary)
+ * - contentType: always present, indicates how to decode body
+ * - headers: empty object if includeHeaders: false
+ * - status: HTTP status code
  */
-export interface ApiResponse<T = unknown> {
-  data: T
+export interface ApiResponse {
+  body: string
   status: number
+  contentType: string
   headers: Record<string, string>
 }
 

@@ -33,11 +33,7 @@ describe('FetchGuard worker bundle', () => {
         payload: {
           config: {
             allowedDomains: [],
-            debug: false,
-            refreshEarlyMs: 60_000,
-            defaultTimeoutMs: 30_000,
-            retryCount: 3,
-            retryDelayMs: 1_000
+            refreshEarlyMs: 60_000
           },
           providerConfig: {
             type: 'cookie-auth',
