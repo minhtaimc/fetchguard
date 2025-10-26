@@ -31,14 +31,16 @@ import { arrayBufferToBase64, isBinaryContentType } from './utils/binary'
   let expiresAt: number | null = null
   let currentUser: unknown | undefined
   const pendingControllers = new Map<string, AbortController>()
-  let refreshPromise: Promise<void> | null = null
+  let refreshPromise: Promise<Result<string>> | null = null
 
 /**
  * Ensure we have a valid access token (not expired).
  * If token is missing or expired, refresh it.
  * Prevents concurrent refresh attempts.
+ *
+ * @returns Result<string> - access token on success, error on failure
  */
-async function ensureValidToken(): Promise<Result<string | null>> {
+async function ensureValidToken(): Promise<Result<string>> {
   // Provider must be initialized via SETUP first
   if (!provider) {
     return err(InitErrors.NotInitialized())
@@ -53,48 +55,43 @@ async function ensureValidToken(): Promise<Result<string | null>> {
   }
 
   if (refreshPromise) {
-    await refreshPromise
-    return ok(accessToken)
+    const result = await refreshPromise
+    return result
   }
 
-  let refreshError: Result<unknown> | null = null
-
-  refreshPromise = (async () => {
+  refreshPromise = (async (): Promise<Result<string>> => {
     try {
       // Provider already checked above, TypeScript needs assertion
       if (!provider) {
-        refreshError = err(InitErrors.NotInitialized())
-        return
+        return err(InitErrors.NotInitialized())
       }
 
       const valueRes = await provider.refreshToken(refreshToken)
 
       if (valueRes.isError()) {
         setTokenState({ token: null, expiresAt: null, user: undefined, refreshToken: undefined })
-        refreshError = valueRes
-        return
+        return err(valueRes.errors)
       }
 
       const tokenInfo = valueRes.data
       if (!tokenInfo) {
-        refreshError = err(AuthErrors.TokenRefreshFailed({ message: 'Provider returned null token info' }))
-        return
+        return err(AuthErrors.TokenRefreshFailed({ message: 'Provider returned null token info' }))
       }
 
       setTokenState(tokenInfo)
+
+      // Validate that we got a valid access token after refresh
+      if (!accessToken) {
+        return err(AuthErrors.TokenRefreshFailed({ message: 'Access token is null after refresh' }))
+      }
+
+      return ok(accessToken)
     } finally {
       refreshPromise = null
     }
   })()
 
-  await refreshPromise
-
-  // Return error if refresh failed
-  if (refreshError) {
-    return refreshError as Result<string | null>
-  }
-
-  return ok(accessToken)
+  return refreshPromise
 }
 
 /**
