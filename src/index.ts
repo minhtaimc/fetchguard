@@ -25,7 +25,7 @@ export type {
   MessageType
 } from './messages'
 
-// Organized error definitions (inspired by old-workers)
+// Organized error definitions
 export {
   GeneralErrors,
   InitErrors,

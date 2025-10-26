@@ -71,13 +71,13 @@ export function deserializeFormData(serialized: SerializedFormData): FormData {
 /**
  * Check if body is FormData
  */
-export function isFormData(body: any): body is FormData {
+export function isFormData(body: unknown): body is FormData {
   return body instanceof FormData
 }
 
 /**
  * Check if serialized body is SerializedFormData
  */
-export function isSerializedFormData(body: any): body is SerializedFormData {
-  return body && typeof body === 'object' && body._type === 'FormData'
+export function isSerializedFormData(body: unknown): body is SerializedFormData {
+  return body !== null && typeof body === 'object' && (body as SerializedFormData)._type === 'FormData'
 }

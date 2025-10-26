@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import type { WorkerConfig, ApiResponse } from './types'
+import type { WorkerConfig, ApiResponse, TokenProvider, FetchGuardRequestInit, ProviderPresetConfig } from './types'
 import type { MainToWorkerMessage } from './messages'
 import { ok, err, type Result } from 'ts-micro-result'
 import { MSG } from './messages'
@@ -12,7 +12,7 @@ import {
   RequestErrors,
   GeneralErrors
 } from './errors'
-import { sendAuthStateChanged, sendAuthCallResult, sendPong, sendReady, sendResult, sendFetchResult, sendFetchError } from './worker-post'
+import { sendAuthStateChanged, sendAuthCallResult, sendPong, sendReady, sendSetupError, sendError, sendFetchResult, sendFetchError } from './worker-post'
 import { getProvider } from './utils/registry'
 import { buildProviderFromPreset } from './provider/register-presets'
 import { deserializeFormData, isSerializedFormData } from './utils/formdata'
@@ -24,7 +24,7 @@ import { arrayBufferToBase64, isBinaryContentType } from './utils/binary'
  */
 ;(function () {
   let config: WorkerConfig | null = null
-  let provider: any = null
+  let provider: TokenProvider | null = null
   let accessToken: string | null = null
   let refreshToken: string | null = null
   let expiresAt: number | null = null
@@ -38,6 +38,11 @@ import { arrayBufferToBase64, isBinaryContentType } from './utils/binary'
  * Prevents concurrent refresh attempts.
  */
 async function ensureValidToken(): Promise<Result<string | null>> {
+  // Provider must be initialized via SETUP first
+  if (!provider) {
+    return err(InitErrors.NotInitialized())
+  }
+
   if (accessToken && expiresAt) {
     const refreshEarlyMs = config?.refreshEarlyMs ?? DEFAULT_REFRESH_EARLY_MS
     const timeLeft = expiresAt - Date.now()
@@ -53,6 +58,11 @@ async function ensureValidToken(): Promise<Result<string | null>> {
 
   refreshPromise = (async () => {
     try {
+      // Provider already checked above, TypeScript needs assertion
+      if (!provider) {
+        return
+      }
+
       const valueRes = await provider.refreshToken(refreshToken)
 
       if (valueRes.isError()) {
@@ -61,6 +71,9 @@ async function ensureValidToken(): Promise<Result<string | null>> {
       }
 
       const tokenInfo = valueRes.data
+      if (!tokenInfo) {
+        return
+      }
 
       setTokenState(tokenInfo)
     } finally {
@@ -114,7 +127,7 @@ function validateDomain(url: string): boolean {
 /**
  * Make API request with proactive token management
  */
-async function makeApiRequest(url: string, options: any = {}): Promise<Result<ApiResponse>> {
+async function makeApiRequest(url: string, options: FetchGuardRequestInit = {}): Promise<Result<ApiResponse>> {
   if (!config) {
     return err(InitErrors.NotInitialized())
   }
@@ -125,9 +138,8 @@ async function makeApiRequest(url: string, options: any = {}): Promise<Result<Ap
 
   const requiresAuth = options.requiresAuth !== false
   const includeHeaders = options.includeHeaders === true
-  const fetchOptions: RequestInit = { ...options }
-  delete (fetchOptions as any).requiresAuth
-  delete (fetchOptions as any).includeHeaders
+  // Extract FetchGuard-specific options and keep only standard RequestInit
+  const { requiresAuth: _, includeHeaders: __, ...fetchOptions } = options
 
   // Deserialize FormData if present (inspired by api-worker.js:484-518)
   if (fetchOptions.body && isSerializedFormData(fetchOptions.body)) {
@@ -250,7 +262,6 @@ function postAuthChanged() {
 /**
  * Main message handler
  * Each case has its own try-catch for better error isolation
- * Inspired by old-workers/api-worker.ts:24-123
  */
 self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
   const data = event.data
@@ -268,14 +279,23 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
           provider = getProvider(providerConfig)
         } else if (providerConfig && typeof providerConfig === 'object' && 'type' in providerConfig) {
           // ProviderPresetConfig object
-          provider = buildProviderFromPreset(providerConfig as any)
+          provider = buildProviderFromPreset(providerConfig as ProviderPresetConfig)
         } else {
-          throw new Error('Invalid provider config')
+          sendSetupError('Invalid provider config')
+          break
+        }
+
+        // Validate provider was successfully created
+        if (!provider) {
+          sendSetupError('Provider initialization failed - provider is null')
+          break
         }
 
         sendReady()
       } catch (error) {
-        console.error('[FetchGuard Worker] Setup failed:', error)
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error('[FetchGuard Worker] Setup failed:', errorMessage)
+        sendSetupError(errorMessage)
       }
       break
     }
@@ -312,18 +332,27 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         const { method, args, emitEvent } = payload
         const shouldEmitEvent = emitEvent ?? true // Default: emit event
 
+        if (!provider) {
+          sendError(id, err(InitErrors.NotInitialized()))
+          break
+        }
+
         if (typeof provider[method] !== 'function') {
-          sendResult(id, err(GeneralErrors.Unexpected({ message: `Method '${method}' not found on provider` })))
+          sendError(id, err(GeneralErrors.Unexpected({ message: `Method '${method}' not found on provider` })))
           break
         }
 
         const result = await provider[method](...args)
         if (result.isError()) {
-          sendResult(id, result)
+          sendError(id, result)
           break
         }
 
         const tokenInfo = result.data
+        if (!tokenInfo) {
+          sendError(id, err(GeneralErrors.Unexpected({ message: 'Provider returned null token info' })))
+          break
+        }
 
         // Update token state and optionally emit event
         setTokenState(tokenInfo, shouldEmitEvent)
@@ -339,7 +368,7 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
           user: currentUser
         })
       } catch (error) {
-        sendResult(id, err(GeneralErrors.Unexpected({ message: error instanceof Error ? error.message : String(error) })))
+        sendError(id, err(GeneralErrors.Unexpected({ message: error instanceof Error ? error.message : String(error) })))
       }
       break
     }
@@ -364,14 +393,14 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         const ts = data.payload?.timestamp ?? Date.now()
         sendPong(id, ts)
       } catch (error) {
-        sendResult(id, err(GeneralErrors.Unexpected({ message: error instanceof Error ? error.message : String(error) })))
+        sendError(id, err(GeneralErrors.Unexpected({ message: error instanceof Error ? error.message : String(error) })))
       }
       break
     }
 
     default: {
       const anyData: any = data
-      sendResult(anyData.id, err(GeneralErrors.UnknownMessage({ message: `Unknown message type: ${String(anyData.type)}` })))
+      sendError(anyData.id, err(GeneralErrors.UnknownMessage({ message: `Unknown message type: ${String(anyData.type)}` })))
     }
   }
 }

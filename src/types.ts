@@ -77,6 +77,9 @@ export interface TokenProvider {
    * Custom auth methods (optional)
    * Examples: loginWithPhone, loginWithGoogle, loginWithFacebook, etc.
    * All must return Result<TokenInfo> for token retrieval
+   *
+   * Note: Using any[] for args to allow flexible custom auth methods
+   * while maintaining type compatibility with specific method signatures above
    */
   [key: string]: (...args: any[]) => Promise<Result<TokenInfo>>
 }

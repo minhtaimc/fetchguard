@@ -23,6 +23,6 @@ export function buildProviderFromPreset(config: ProviderPresetConfig): TokenProv
       })
 
     default:
-      throw new Error(`Unknown provider type: ${(config as any).type}`)
+      throw new Error(`Unknown provider type: ${String((config as { type?: unknown }).type)}`)
   }
 }

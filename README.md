@@ -491,11 +491,11 @@ Types:
 
 ## Message Protocol (pairs, summary)
 
-- Main -> Worker: SETUP  -> Worker -> Main: READY
+- Main -> Worker: SETUP  -> Worker -> Main: READY | SETUP_ERROR
 - Main -> Worker: FETCH  -> Worker -> Main: FETCH_RESULT | FETCH_ERROR
-- Main -> Worker: AUTH_CALL(login/logout/...) -> Worker -> Main: RESULT (and AUTH_STATE_CHANGED event)
+- Main -> Worker: AUTH_CALL(login/logout/...) -> Worker -> Main: AUTH_CALL_RESULT | ERROR (and AUTH_STATE_CHANGED event)
 - Main -> Worker: CANCEL -> aborts in-worker fetch (no explicit response)
-- Main -> Worker: PING  -> Worker -> Main: PONG
+- Main -> Worker: PING  -> Worker -> Main: PONG | ERROR
 
 ## Error Handling
 

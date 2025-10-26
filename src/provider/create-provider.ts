@@ -11,7 +11,7 @@ import { AuthErrors, NetworkErrors } from '../errors'
 /**
  * Custom auth method type
  */
-type CustomAuthMethod = (...args: any[]) => Promise<Result<TokenInfo>>
+type CustomAuthMethod = (...args: unknown[]) => Promise<Result<TokenInfo>>
 
 /**
  * Configuration for creating provider

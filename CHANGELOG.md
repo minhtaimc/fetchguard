@@ -5,6 +5,86 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2025-10-26
+
+### Added
+
+- **SETUP_ERROR Message** - Clear error reporting when worker setup fails
+  - Worker now sends `SETUP_ERROR` message with error details immediately on setup failure
+  - Client rejects setup promise with descriptive error message
+  - No more 10-second timeout wait for setup errors
+  - Symmetric with `READY` message (READY = success, SETUP_ERROR = failure)
+
+### Changed
+
+- **BREAKING**: Renamed `RESULT` message to `ERROR` for clarity
+  - Old: `RESULT` message with `{ result: SerializedResult }` payload
+  - New: `ERROR` message with `{ errors: ErrorDetail[] }` payload
+  - More semantic - clearly indicates error responses
+  - Simpler payload - only transfers error details, not entire Result object
+  - Smaller message size - no serialization of success/status fields
+  - All error scenarios now use consistent `ERROR` message
+
+- **Type Safety Improvements**
+  - `provider: any` → `TokenProvider | null` with proper null checks
+  - `makeApiRequest options: any` → `FetchGuardRequestInit`
+  - `post/put/patch body?: any` → `body?: unknown`
+  - `sendResult()` → `sendError()` with `Result<unknown>` parameter
+  - Type guard functions use `unknown` instead of `any`
+  - Better TypeScript inference throughout codebase
+
+- **Improved Error Handling**
+  - Provider null checks added to `ensureValidToken()` and `AUTH_CALL`
+  - Setup validates provider creation and throws clear error if null
+  - All error responses now use `sendError()` with `ErrorDetail[]`
+  - Removed dependency on `ts-micro-result` serialization format for errors
+
+### Fixed
+
+- **Delete Properties Pattern** - Replaced `delete (obj as any).prop` with destructuring
+  ```typescript
+  // Before
+  delete (fetchOptions as any).requiresAuth
+
+  // After
+  const { requiresAuth, includeHeaders, ...fetchOptions } = options
+  ```
+
+- **Provider Type Safety** - Provider is guaranteed non-null after SETUP
+  - Setup fails with `SETUP_ERROR` if provider initialization fails
+  - Runtime checks ensure provider exists before use
+  - Clear error messages when provider is not initialized
+
+### Internal
+
+- Removed unused imports (`fromJSON`, `GeneralErrors` from client)
+- Updated message protocol documentation
+- Improved code comments and type annotations
+- Consistent error handling across all message types
+
+### Migration Guide
+
+**ERROR Message Handling:**
+
+If you're handling worker messages directly (advanced usage only):
+
+```typescript
+// Before (v1.4.x)
+if (type === MSG.RESULT) {
+  const result = fromJSON(payload.result)
+  // handle result
+}
+
+// After (v1.5.0)
+if (type === MSG.ERROR) {
+  const errors = payload.errors  // ErrorDetail[]
+  const result = err(errors)
+  // handle error result
+}
+```
+
+**Note:** Most users don't need to change anything - the client handles message protocol internally.
+
 ## [1.4.0] - 2025-10-26
 
 ### Added

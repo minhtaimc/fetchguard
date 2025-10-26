@@ -1,4 +1,4 @@
-import type { SerializedResult } from 'ts-micro-result'
+import type { ErrorDetail } from 'ts-micro-result'
 import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig, AuthResult, ApiResponse } from './types'
 
 /**
@@ -36,8 +36,9 @@ export interface MainPayloads {
  * Payloads for messages sent from Worker thread → Main thread
  */
 export interface WorkerPayloads {
-  RESULT: { result: SerializedResult | object }
+  ERROR: { errors: ErrorDetail[] }
   READY: undefined
+  SETUP_ERROR: { error: string }
   PONG: { timestamp: number }
   LOG: { level: 'info' | 'warn' | 'error'; message: string }
   AUTH_STATE_CHANGED: AuthResult
@@ -82,8 +83,9 @@ export const MSG = Object.freeze({
   PING: 'PING',
 
   // Worker -> Main messages
-  RESULT: 'RESULT',
+  ERROR: 'ERROR',
   READY: 'READY',
+  SETUP_ERROR: 'SETUP_ERROR',
   PONG: 'PONG',
   LOG: 'LOG',
   AUTH_STATE_CHANGED: 'AUTH_STATE_CHANGED',

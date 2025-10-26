@@ -6,20 +6,20 @@ import type {
   ProviderPresetConfig,
   AuthResult
 } from './types'
-import { fromJSON, ok, err, type Result } from 'ts-micro-result'
+import type { MainToWorkerMessage } from './messages'
+import { ok, err, type Result } from 'ts-micro-result'
 import { MSG } from './messages'
 import { DEFAULT_REFRESH_EARLY_MS } from './constants'
-import { GeneralErrors, NetworkErrors } from './errors'
+import { NetworkErrors } from './errors'
 import { serializeFormData, isFormData } from './utils/formdata'
 
 /**
  * Queue item for sequential message processing
- * Inspired by old-workers/ApiWorkerService.ts
  */
 interface QueueItem {
   id: string
-  message: any
-  resolve: (response: any) => void
+  message: MainToWorkerMessage
+  resolve: (response: unknown) => void
   reject: (error: Error) => void
   timeout: ReturnType<typeof setTimeout>
 }
@@ -30,8 +30,10 @@ interface QueueItem {
 export class FetchGuardClient {
   private worker: Worker
   private messageId = 0
+  // Using unknown because different messages have different response types
+  // (ApiResponse for FETCH, AuthResult for AUTH_CALL, etc.)
   private pendingRequests = new Map<string, {
-    resolve: (value: any) => void
+    resolve: (value: unknown) => void
     reject: (error: Error) => void
   }>()
   private authListeners = new Set<(state: AuthResult) => void>()
@@ -141,19 +143,24 @@ export class FetchGuardClient {
       }
     }
 
-    if (type === MSG.RESULT) {
+    if (type === MSG.ERROR) {
       const request = this.pendingRequests.get(id)
       if (!request) return
 
       this.pendingRequests.delete(id)
 
-      if (payload && payload.result) {
-        try {
-          const result = fromJSON(JSON.stringify(payload.result))
-          request.resolve(result)
-        } catch (e) {
-          request.resolve(err(GeneralErrors.ResultParse({ message: String(e) })))
-        }
+      // Reconstruct error Result from ErrorDetail[]
+      const errors = payload?.errors || []
+      request.resolve(err(errors))
+      return
+    }
+
+    if (type === MSG.SETUP_ERROR) {
+      // Setup failed - reject setup promise
+      if (this.setupReject) {
+        this.setupReject(new Error(`Worker setup failed: ${payload?.error || 'Unknown error'}`))
+        this.setupResolve = undefined
+        this.setupReject = undefined
       }
       return
     }
@@ -240,7 +247,7 @@ export class FetchGuardClient {
     // Serialize FormData if present (async operation)
     const result = new Promise<Result<ApiResponse>>(async (resolve, reject) => {
       this.pendingRequests.set(id, {
-        resolve: (response) => resolve(response),
+        resolve: (response) => resolve(response as Result<ApiResponse>),
         reject: (error) => reject(error)
       })
 
@@ -250,7 +257,8 @@ export class FetchGuardClient {
         // Serialize FormData body before sending to worker
         if (options.body && isFormData(options.body)) {
           const serializedBody = await serializeFormData(options.body)
-          serializedOptions.body = serializedBody as any
+          // SerializedFormData will be deserialized back to FormData in worker
+          serializedOptions.body = serializedBody as unknown as BodyInit
         }
 
         // Serialize Headers object to plain object (Headers cannot be cloned)
@@ -300,7 +308,7 @@ export class FetchGuardClient {
     return this.fetch(url, { ...options, method: 'GET' })
   }
 
-  async post(url: string, body?: any, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
+  async post(url: string, body?: unknown, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
     // If body is FormData, use fetch directly (no JSON.stringify)
     if (body && isFormData(body)) {
       return this.fetch(url, {
@@ -326,7 +334,7 @@ export class FetchGuardClient {
     })
   }
 
-  async put(url: string, body?: any, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
+  async put(url: string, body?: unknown, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
     // If body is FormData, use fetch directly (no JSON.stringify)
     if (body && isFormData(body)) {
       return this.fetch(url, {
@@ -356,7 +364,7 @@ export class FetchGuardClient {
     return this.fetch(url, { ...options, method: 'DELETE' })
   }
 
-  async patch(url: string, body?: any, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
+  async patch(url: string, body?: unknown, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
     // If body is FormData, use fetch directly (no JSON.stringify)
     if (body && isFormData(body)) {
       return this.fetch(url, {
@@ -393,9 +401,9 @@ export class FetchGuardClient {
     const id = this.generateMessageId()
     const message = { id, type: MSG.AUTH_CALL, payload: { method, args, emitEvent } }
 
-    return new Promise((resolve, reject) => {
+    return new Promise<Result<AuthResult>>((resolve, reject) => {
       this.pendingRequests.set(id, {
-        resolve: (r: any) => resolve(r),
+        resolve: (r) => resolve(r as Result<AuthResult>),
         reject: (e: Error) => reject(e)
       })
 
@@ -488,9 +496,9 @@ export class FetchGuardClient {
     const id = this.generateMessageId()
     const message = { id, type: MSG.PING, payload: { timestamp: Date.now() } }
 
-    return new Promise((resolve, reject) => {
+    return new Promise<Result<{ timestamp: number }>>((resolve, reject) => {
       this.pendingRequests.set(id, {
-        resolve: (r: any) => resolve(r),
+        resolve: (r) => resolve(r as Result<{ timestamp: number }>),
         reject: (e: Error) => reject(e)
       })
 
@@ -509,7 +517,7 @@ export class FetchGuardClient {
    * Send message through queue system
    * All messages go through queue for sequential processing
    */
-  private sendMessageQueued<T = any>(message: any, timeoutMs: number = this.queueTimeout): Promise<T> {
+  private sendMessageQueued<T = unknown>(message: MainToWorkerMessage, timeoutMs: number = this.queueTimeout): Promise<T> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         const index = this.requestQueue.findIndex(item => item.id === message.id)
@@ -523,7 +531,7 @@ export class FetchGuardClient {
       const queueItem: QueueItem = {
         id: message.id,
         message,
-        resolve,
+        resolve: resolve as (response: unknown) => void,
         reject,
         timeout
       }

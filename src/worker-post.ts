@@ -16,13 +16,13 @@ function post(message: WorkerToMainMessage): void {
 }
 
 /**
- * Send generic Result for non-fetch operations (INIT, LOGIN, LOGOUT, etc.)
+ * Send error result (generic errors for auth operations, etc.)
  */
-export function sendResult(id: string, result: Result<any>): void {
+export function sendError(id: string, result: Result<unknown>): void {
   post({
-    type: MSG.RESULT,
+    type: MSG.ERROR,
     id,
-    payload: { result: result.toJSON() }
+    payload: { errors: result.errors || [] }
   } as any)
 }
 
@@ -55,6 +55,17 @@ export function sendReady(): void {
   post({
     type: MSG.READY,
     id: `evt_${Date.now()}`
+  } as any)
+}
+
+/**
+ * Send SETUP_ERROR event (worker setup failed)
+ */
+export function sendSetupError(error: string): void {
+  post({
+    type: MSG.SETUP_ERROR,
+    id: `evt_${Date.now()}`,
+    payload: { error }
   } as any)
 }
 
