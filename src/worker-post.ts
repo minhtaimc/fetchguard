@@ -23,7 +23,7 @@ export function sendError(id: string, result: Result<unknown>): void {
   post({
     type: MSG.ERROR,
     id,
-    payload: result
+    payload: { errors: result.errors, meta: result.meta, status: result.status }
   } as any)
 }
 

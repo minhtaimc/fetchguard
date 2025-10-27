@@ -7,7 +7,7 @@ import type {
   AuthResult
 } from './types'
 import type { MainToWorkerMessage } from './messages'
-import { ok, err, type Result } from 'ts-micro-result'
+import { ok, err, type Result, fromJSON } from 'ts-micro-result'
 import { MSG } from './messages'
 import { DEFAULT_REFRESH_EARLY_MS } from './constants'
 import { RequestErrors } from './errors'
@@ -166,8 +166,7 @@ export class FetchGuardClient {
 
       this.pendingRequests.delete(id)
 
-      // Payload is complete Result object with errors, status, and meta
-      request.resolve(payload as Result<never>)
+      request.resolve(err(payload.errors, payload.meta, payload.status))
       return
     }
 
