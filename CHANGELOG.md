@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.5] - 2025-10-27
+
+### Added
+
+- **Detailed Auth Error Information** - Provider now includes response body in auth errors
+  - Login/refresh/logout failures now return HTTP status code and response body
+  - Error structure: `{ status: number, meta: { body: string } }`
+  - Access via `result.errors[0].status` and `result.errors[0].meta?.body`
+  - Consistent with fetch error handling pattern
+
+### Example
+
+```typescript
+const result = await api.login({ email: 'wrong@example.com', password: 'wrong' })
+
+if (result.isError()) {
+  const error = result.errors[0]
+  console.log('Status:', error.status)        // 401
+  console.log('Message:', error.message)      // "Login failed"
+  console.log('Body:', error.meta?.body)      // '{"error": "Invalid credentials"}'
+
+  // Parse JSON error details from server
+  try {
+    const details = JSON.parse(error.meta?.body || '{}')
+    console.log('Error:', details.error)      // "Invalid credentials"
+  } catch {}
+}
+```
+
 ## [1.5.4] - 2025-10-27
 
 ### Added

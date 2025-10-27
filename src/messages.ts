@@ -1,4 +1,4 @@
-import type { ErrorDetail } from 'ts-micro-result'
+import type { ErrorDetail, Result } from 'ts-micro-result'
 import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig, AuthResult, ApiResponse } from './types'
 
 /**
@@ -36,7 +36,7 @@ export interface MainPayloads {
  * Payloads for messages sent from Worker thread → Main thread
  */
 export interface WorkerPayloads {
-  ERROR: { errors: ErrorDetail[] }
+  ERROR: Result<never>  // Pass complete Result object with errors, status, meta
   READY: undefined
   SETUP_ERROR: { error: string }
   PONG: { timestamp: number }

@@ -17,12 +17,13 @@ function post(message: WorkerToMainMessage): void {
 
 /**
  * Send error result (generic errors for auth operations, etc.)
+ * Passes complete Result object with errors, status, and meta
  */
 export function sendError(id: string, result: Result<unknown>): void {
   post({
     type: MSG.ERROR,
     id,
-    payload: { errors: result.errors || [] }
+    payload: result
   } as any)
 }
 

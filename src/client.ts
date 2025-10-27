@@ -166,9 +166,8 @@ export class FetchGuardClient {
 
       this.pendingRequests.delete(id)
 
-      // Reconstruct error Result from ErrorDetail[]
-      const errors = payload?.errors || []
-      request.resolve(err(errors))
+      // Payload is complete Result object with errors, status, and meta
+      request.resolve(payload as Result<never>)
       return
     }
 

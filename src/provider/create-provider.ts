@@ -55,7 +55,9 @@ export function createProvider(config: ProviderConfig): TokenProvider {
         const response = await config.strategy.refresh(currentRefreshToken)
 
         if (!response.ok) {
-          return err(AuthErrors.TokenRefreshFailed({ message: `HTTP ${response.status}` }))
+          // Read response body for error details
+          const body = await response.text().catch(() => '')
+          return err(AuthErrors.TokenRefreshFailed(), { body }, response.status)
         }
 
         const tokenInfo = await config.parser.parse(response)
@@ -78,7 +80,9 @@ export function createProvider(config: ProviderConfig): TokenProvider {
         const response = await config.strategy.login(payload, url)
 
         if (!response.ok) {
-          return err(AuthErrors.LoginFailed({ message: `HTTP ${response.status}` }))
+          // Read response body for error details
+          const body = await response.text().catch(() => '')
+          return err(AuthErrors.LoginFailed(), { body }, response.status)
         }
 
         const tokenInfo = await config.parser.parse(response)
@@ -101,7 +105,9 @@ export function createProvider(config: ProviderConfig): TokenProvider {
         const response = await config.strategy.logout(payload)
 
         if (!response.ok) {
-          return err(AuthErrors.LogoutFailed({ message: `HTTP ${response.status}` }))
+          // Read response body for error details
+          const body = await response.text().catch(() => '')
+          return err(AuthErrors.LogoutFailed(), { body }, response.status)
         }
 
         if (config.refreshStorage) {

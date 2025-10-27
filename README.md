@@ -591,6 +591,44 @@ if (res.isOk()) {
 - ✅ Network errors have no response (connection failed before server responded)
 - ✅ Check `result.meta?.status` for specific HTTP status codes when needed
 
+### Auth Errors (Login/Refresh/Logout)
+
+Auth errors also include HTTP status and response body for detailed debugging:
+
+```ts
+const result = await api.login({ email: 'wrong@example.com', password: 'wrong' })
+
+if (result.isError()) {
+  const error = result.errors[0]
+
+  console.log('Status:', error.status)        // 401
+  console.log('Message:', error.message)      // "Login failed"
+  console.log('Body:', error.meta?.body)      // '{"error": "Invalid credentials"}'
+
+  // Parse JSON error details from server
+  try {
+    const details = JSON.parse(error.meta?.body || '{}')
+    console.log('Server error:', details.error)  // "Invalid credentials"
+    console.log('Details:', details.message)     // Additional error message
+  } catch {
+    // Not JSON - use raw body
+    console.log('Raw error:', error.meta?.body)
+  }
+}
+```
+
+**Available Auth Error Codes:**
+- `LOGIN_FAILED` - Login failed with HTTP status and response body in `error.meta.body`
+- `TOKEN_REFRESH_FAILED` - Token refresh failed with HTTP status and response body
+- `LOGOUT_FAILED` - Logout failed with HTTP status and response body
+- `NOT_AUTHENTICATED` - User is not authenticated (attempted auth-required request without token)
+
+**Key Points:**
+- ✅ Auth errors include HTTP status code in `error.status`
+- ✅ Response body available in `error.meta.body` (raw text/JSON string)
+- ✅ Parse JSON yourself if server returns structured error messages
+- ✅ Consistent pattern with fetch error handling
+
 ## Auth Methods and Events
 
 ### AuthResult Return Value
