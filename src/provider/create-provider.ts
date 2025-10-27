@@ -73,9 +73,9 @@ export function createProvider(config: ProviderConfig): TokenProvider {
       }
     },
 
-    async login(payload: unknown) {
+    async login(payload: unknown, url?: string) {
       try {
-        const response = await config.strategy.login(payload)
+        const response = await config.strategy.login(payload, url)
 
         if (!response.ok) {
           return err(AuthErrors.LoginFailed({ message: `HTTP ${response.status}` }))

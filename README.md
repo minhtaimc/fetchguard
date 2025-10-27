@@ -183,6 +183,32 @@ await api.logout()
 unsubscribe()
 ```
 
+### Multiple Login URLs
+
+FetchGuard supports dynamic login URL selection for different auth methods (OAuth, phone, etc.):
+
+```ts
+// Use default login URL
+await api.login({
+  email: 'user@example.com',
+  password: 'password123'
+})
+
+// Override with OAuth URL
+await api.login(
+  { code: 'oauth_code_123', provider: 'google' },
+  'https://api.example.com/auth/oauth'  // ← Custom URL
+)
+
+// Override with phone auth URL
+await api.login(
+  { phone: '+84987654321', otp: '123456' },
+  'https://api.example.com/auth/phone'  // ← Custom URL
+)
+```
+
+No need to create custom methods for each auth type - just pass the URL as the second parameter!
+
 ### Public Endpoints and Headers
 
 ```ts

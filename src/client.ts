@@ -438,10 +438,21 @@ export class FetchGuardClient {
   /**
    * Convenience wrapper for login
    * @param payload - Login credentials
+   * @param url - Optional URL override
    * @param emitEvent - Whether to emit AUTH_STATE_CHANGED event (default: true)
    */
-  async login(payload?: unknown, emitEvent: boolean = true): Promise<Result<AuthResult>> {
-    const args = typeof payload === 'undefined' ? [] : [payload]
+  async login(payload?: unknown, url?: string, emitEvent: boolean = true): Promise<Result<AuthResult>> {
+    const args: unknown[] = []
+    if (typeof payload !== 'undefined') {
+      args.push(payload)
+    }
+    if (typeof url !== 'undefined') {
+      // If payload is undefined but url is provided, need to pass undefined explicitly
+      if (args.length === 0) {
+        args.push(undefined)
+      }
+      args.push(url)
+    }
     return this.call('login', emitEvent, ...args)
   }
 

@@ -5,6 +5,10 @@ import type { AuthStrategy } from '../../types'
  * Suitable for SPA applications
  *
  * All tokens/credentials are sent in request body
+ *
+ * Login URL can be:
+ * - Configured once: loginUrl: 'https://api.example.com/auth/login'
+ * - Passed per call: login(payload, 'https://...')
  */
 export function createBodyStrategy(config: {
   refreshUrl: string
@@ -25,8 +29,8 @@ export function createBodyStrategy(config: {
       })
     },
 
-    async login(payload) {
-      return fetch(config.loginUrl, {
+    async login(payload, url) {
+      return fetch(url || config.loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.4] - 2025-10-27
+
+### Added
+
+- **Multiple Login URLs Support** - Dynamic login endpoint selection via URL parameter
+  - `login()` now accepts optional `url` parameter: `login(payload, url?, emitEvent?)`
+  - Override configured `loginUrl` on a per-call basis
+  - Support multiple auth methods (OAuth, phone, biometric) without custom methods
+  - URL flows through entire stack: `client → worker → provider → strategy`
+  - Works with both `createBodyStrategy` and `createCookieStrategy`
+
+### Changed
+
+- **Updated Type Signatures** for login method:
+  - `AuthStrategy.login(payload, url?)` - Strategy level
+  - `TokenProvider.login(payload, url?)` - Provider level
+  - `FetchGuardClient.login(payload?, url?, emitEvent?)` - Client level
+
+### Examples
+
+```typescript
+// Use default URL
+await api.login({ email: 'user@example.com', password: 'secret' })
+
+// Override with OAuth URL
+await api.login(
+  { code: 'oauth_123', provider: 'google' },
+  'https://api.example.com/auth/oauth'
+)
+
+// Override with phone URL
+await api.login(
+  { phone: '+84987654321', otp: '123456' },
+  'https://api.example.com/auth/phone'
+)
+```
+
 ## [1.5.3] - 2025-10-27
 
 ### Changed

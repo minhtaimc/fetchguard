@@ -62,9 +62,10 @@ export interface TokenProvider {
   /**
    * Login with credentials (required)
    * @param payload - Login credentials (email/password, etc.)
+   * @param url - Optional URL override (if not provided, uses configured loginUrl)
    * @returns Result<TokenInfo> with tokens
    */
-  login(payload: unknown): Promise<Result<TokenInfo>>
+  login(payload: unknown, url?: string): Promise<Result<TokenInfo>>
 
   /**
    * Logout - clear tokens (required)
@@ -117,8 +118,12 @@ export interface AuthStrategy {
   /** Refresh access token */
   refresh(refreshToken: string | null): Promise<Response>
 
-  /** Login with credentials */
-  login(payload: unknown): Promise<Response>
+  /**
+   * Login with credentials
+   * @param payload - Login credentials
+   * @param url - Optional URL override (if not provided, uses configured loginUrl)
+   */
+  login(payload: unknown, url?: string): Promise<Response>
 
   /** Logout */
   logout(payload?: unknown): Promise<Response>
