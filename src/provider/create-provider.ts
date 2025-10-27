@@ -6,7 +6,7 @@ import type {
   TokenInfo
 } from '../types'
 import { ok, err, type Result } from 'ts-micro-result'
-import { AuthErrors, NetworkErrors } from '../errors'
+import { AuthErrors, RequestErrors } from '../errors'
 
 /**
  * Custom auth method type
@@ -69,7 +69,7 @@ export function createProvider(config: ProviderConfig): TokenProvider {
 
         return ok(tokenInfo)
       } catch (error) {
-        return err(NetworkErrors.NetworkError({ message: String(error) }))
+        return err(RequestErrors.NetworkError({ message: String(error) }))
       }
     },
 
@@ -92,7 +92,7 @@ export function createProvider(config: ProviderConfig): TokenProvider {
 
         return ok(tokenInfo)
       } catch (error) {
-        return err(NetworkErrors.NetworkError({ message: String(error) }))
+        return err(RequestErrors.NetworkError({ message: String(error) }))
       }
     },
 
@@ -115,7 +115,7 @@ export function createProvider(config: ProviderConfig): TokenProvider {
           user: null  // Explicitly clear user on logout
         })
       } catch (error) {
-        return err(NetworkErrors.NetworkError({ message: String(error) }))
+        return err(RequestErrors.NetworkError({ message: String(error) }))
       }
     }
   }

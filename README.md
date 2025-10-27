@@ -511,11 +511,11 @@ if (res.isOk()) {
 }
 ```
 
-Grouped error helpers are exported: `GeneralErrors`, `InitErrors`, `AuthErrors`, `DomainErrors`, `NetworkErrors`, `HttpErrors`, `RequestErrors`.
+Grouped error helpers are exported: `GeneralErrors`, `InitErrors`, `AuthErrors`, `DomainErrors`, `RequestErrors`.
 
-### HTTP Errors vs Network Errors
+### Request Errors (HTTP & Network)
 
-FetchGuard distinguishes between **HTTP errors** (server returned 4xx/5xx) and **Network errors** (connection failed):
+FetchGuard uses a unified `RequestErrors` category that includes both HTTP and network errors:
 
 ```ts
 const res = await api.post('/data', payload)
@@ -526,38 +526,44 @@ if (res.isOk()) {
 } else {
   const err = res.errors?.[0]
 
-  // HTTP 4xx/5xx errors - server responded with error status
-  if (err?.code === 'HTTP_NOT_FOUND') {
-    console.log('Resource not found')
-  } else if (err?.code === 'HTTP_UNAUTHORIZED') {
-    console.log('Need to login')
-  } else if (err?.code === 'HTTP_SERVER_ERROR') {
-    console.log('Server error:', res.meta?.body) // Error response body available in metadata
+  // HTTP errors (4xx/5xx) - server responded with error status
+  if (err?.code === 'HTTP_ERROR') {
+    const status = res.meta?.status
+    console.log(`HTTP ${status} error`)
+    console.log('Response body:', res.meta?.body)  // Debug server error response
+
+    // Check specific status codes if needed
+    if (status === 404) {
+      console.log('Resource not found')
+    } else if (status === 401) {
+      console.log('Unauthorized - need to login')
+    }
   }
 
-  // Network errors - connection failed, no response
+  // Network errors - connection failed, no HTTP response
   else if (err?.code === 'NETWORK_ERROR') {
     console.log('Connection failed - check internet')
-  } else if (err?.code === 'REQUEST_CANCELLED') {
+  }
+
+  // Request cancelled by user
+  else if (err?.code === 'REQUEST_CANCELLED') {
     console.log('Request was cancelled')
   }
 }
 ```
 
-**Available HTTP Error Codes:**
-- `HTTP_BAD_REQUEST` (400)
-- `HTTP_UNAUTHORIZED` (401)
-- `HTTP_FORBIDDEN` (403)
-- `HTTP_NOT_FOUND` (404)
-- `HTTP_INTERNAL_SERVER_ERROR` (500)
-- `HTTP_CLIENT_ERROR` (generic 4xx)
-- `HTTP_SERVER_ERROR` (generic 5xx)
+**Available Request Error Codes:**
+- `HTTP_ERROR` - Server returned 4xx/5xx status (includes response body in `result.meta`)
+- `NETWORK_ERROR` - Connection failed, timeout, or DNS error (no response)
+- `REQUEST_CANCELLED` - Request was cancelled via `cancel()` method
+- `RESPONSE_PARSE_FAILED` - Failed to read/parse response body
 
 **Key Points:**
-- ✅ HTTP 4xx/5xx errors include response body in `result.meta` for debugging
-- ✅ Network errors have no response body (connection failed before server responded)
-- ✅ All HTTP responses (including errors) pass through the same `FETCH_RESULT` message
-- ✅ Client splits success/error based on status code for clean API
+- ✅ Single `RequestErrors` category - easier to remember
+- ✅ HTTP errors include status code via `defineErrorAdvanced` (message: "HTTP 404 error")
+- ✅ HTTP error response body available in `result.meta` for debugging
+- ✅ Network errors have no response (connection failed before server responded)
+- ✅ Check `result.meta?.status` for specific HTTP status codes when needed
 
 ## Auth Methods and Events
 

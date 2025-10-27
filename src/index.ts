@@ -31,8 +31,6 @@ export {
   InitErrors,
   AuthErrors,
   DomainErrors,
-  NetworkErrors,
-  HttpErrors,
   RequestErrors
 } from './errors'
 

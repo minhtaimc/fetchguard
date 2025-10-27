@@ -9,7 +9,6 @@ import {
   InitErrors,
   AuthErrors,
   DomainErrors,
-  NetworkErrors,
   RequestErrors,
   GeneralErrors
 } from './errors'
@@ -186,7 +185,7 @@ async function makeApiRequest(url: string, options: FetchGuardRequestInit = {}):
     const aborted = (e && (e as any).name === 'AbortError')
     return aborted
       ? err(RequestErrors.Cancelled())
-      : err(NetworkErrors.NetworkError({ message: String(e) }))
+      : err(RequestErrors.NetworkError({ message: String(e) }))
   }
 
   // Extract content-type (always needed for binary detection)

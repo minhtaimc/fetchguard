@@ -10,7 +10,7 @@ import type { MainToWorkerMessage } from './messages'
 import { ok, err, type Result } from 'ts-micro-result'
 import { MSG } from './messages'
 import { DEFAULT_REFRESH_EARLY_MS } from './constants'
-import { NetworkErrors, HttpErrors } from './errors'
+import { RequestErrors } from './errors'
 import { serializeFormData, isFormData } from './utils/formdata'
 
 /**
@@ -132,28 +132,8 @@ export class FetchGuardClient {
         request.resolve(ok(payload))
       } else {
         // HTTP 4xx/5xx = error with response metadata
-        // Map to specific error types for common status codes
-        let httpError
-        if (status === 400) {
-          httpError = HttpErrors.BadRequest()
-        } else if (status === 401) {
-          httpError = HttpErrors.Unauthorized()
-        } else if (status === 403) {
-          httpError = HttpErrors.Forbidden()
-        } else if (status === 404) {
-          httpError = HttpErrors.NotFound()
-        } else if (status === 500) {
-          httpError = HttpErrors.InternalServerError()
-        } else if (status >= 400 && status < 500) {
-          // Generic 4xx - need status in message
-          httpError = HttpErrors.ClientError({ message: `HTTP ${status}` })
-        } else {
-          // Generic 5xx - need status in message
-          httpError = HttpErrors.ServerError({ message: `HTTP ${status}` })
-        }
-
         request.resolve(err(
-          httpError,
+          RequestErrors.HttpError({ status }),
           {
             body: String(payload?.body ?? ''),
             headers: payload?.headers ?? {}
@@ -173,7 +153,7 @@ export class FetchGuardClient {
 
       const status = typeof payload?.status === 'number' ? payload.status : undefined
       request.resolve(err(
-        NetworkErrors.NetworkError({ message: String(payload?.error || 'Network error') }),
+        RequestErrors.NetworkError({ message: String(payload?.error || 'Network error') }),
         undefined,
         status
       ))

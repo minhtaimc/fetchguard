@@ -5,67 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.5.2] - 2025-10-27
-
-### Added
-
-- **HttpErrors Category** - New error category for HTTP status code errors
-  - Separate `HttpErrors` from `NetworkErrors` for semantic clarity
-  - HTTP errors = server responded with 4xx/5xx status (response available)
-  - Network errors = connection failed, timeout, cancelled (no response)
-  - Specific error codes: `HTTP_BAD_REQUEST` (400), `HTTP_UNAUTHORIZED` (401), `HTTP_FORBIDDEN` (403), `HTTP_NOT_FOUND` (404), `HTTP_INTERNAL_SERVER_ERROR` (500)
-  - Generic fallbacks: `HTTP_CLIENT_ERROR` (4xx), `HTTP_SERVER_ERROR` (5xx)
+## [1.5.3] - 2025-10-27
 
 ### Changed
 
-- **HTTP Error Handling** - Simplified worker, smarter client
+- **BREAKING**: Simplified error categories - unified `RequestErrors` for all request/response errors
+  - Removed `NetworkErrors` and `HttpErrors` categories
+  - All request-related errors now in single `RequestErrors` category
+  - Easier to use: only one category to remember for fetch errors
+
+- **HTTP Error Handling** - Single `HTTP_ERROR` code with status in metadata
   - Worker: Always returns `ok()` for all HTTP responses (2xx, 3xx, 4xx, 5xx)
   - Worker: Only returns `err()` for network/timeout/cancel errors
   - Client: Splits success/error based on HTTP status code (2xx/3xx = ok, 4xx/5xx = err)
-  - HTTP 4xx/5xx errors include response body in `result.meta` for debugging
-  - Cleaner separation: worker handles fetch, client handles HTTP semantics
+  - HTTP 4xx/5xx use `RequestErrors.HttpError({ status })` with `defineErrorAdvanced`
+  - Error message includes status code: "HTTP 404 error", "HTTP 500 error"
+  - Response body available in `result.meta` for debugging
 
-- **Error Message Handling** - Proper use of `defineError` defaults
-  - Specific errors (400, 401, 403, 404, 500) use default messages from `defineError`
-  - Generic errors (other 4xx/5xx) include status code in message: `HTTP 418`, `HTTP 503`
-  - No unnecessary message overrides for well-known status codes
+- **Removed unused error codes**
+  - Removed `FetchError` and `Timeout` (never used in codebase)
+  - Only keep errors that are actually used: `NetworkError`, `Cancelled`, `HttpError`, `ResponseParseFailed`
 
 ### Fixed
 
 - **Error Classification** - HTTP errors vs Network errors
-  - Previously: All 4xx/5xx treated as `NetworkErrors.HttpError`
-  - Now: 4xx/5xx use `HttpErrors` (server responded), network failures use `NetworkErrors`
-  - Response body parsing errors properly classified as `RequestErrors.ResponseParseFailed`
+  - HTTP errors (4xx/5xx) use `RequestErrors.HttpError` with status code
+  - Network errors (connection failed) use `RequestErrors.NetworkError`
+  - Response body parsing errors use `RequestErrors.ResponseParseFailed`
+  - Cancelled requests use `RequestErrors.Cancelled`
 
 ### Documentation
 
-- Added comprehensive HTTP error handling guide to README
-- Examples showing how to differentiate HTTP errors from network errors
+- Updated README with unified `RequestErrors` category
+- Simplified error handling examples
 - Migration guide for error code checking
 
 ### Migration Guide
 
-**Error Code Changes:**
+**Error Category Changes:**
 
 ```typescript
 // Before (v1.5.1)
-if (result.errors?.[0]?.code === 'HTTP_ERROR') {
-  // Could be 404, 500, or network error - unclear!
-}
+import { NetworkErrors, HttpErrors, RequestErrors } from 'fetchguard'
+
+if (err?.code === 'HTTP_NOT_FOUND') { ... }
+if (err?.code === 'NETWORK_ERROR') { ... }
 
 // After (v1.5.2)
-if (result.errors?.[0]?.code === 'HTTP_NOT_FOUND') {
-  console.log('Resource not found')
-  console.log('Error response:', result.meta?.body)
+import { RequestErrors } from 'fetchguard'
+
+// Single error code for all HTTP errors
+if (err?.code === 'HTTP_ERROR') {
+  const status = result.meta?.status
+  if (status === 404) {
+    console.log('Not found')
+  } else if (status === 401) {
+    console.log('Unauthorized')
+  }
 }
 
-if (result.errors?.[0]?.code === 'NETWORK_ERROR') {
-  console.log('Connection failed - no internet?')
-  // No response body available
+if (err?.code === 'NETWORK_ERROR') {
+  console.log('Connection failed')
 }
 ```
 
-**Accessing Error Response Body:**
+**Usage Pattern:**
 
 ```typescript
 const result = await api.post('/data', payload)
@@ -73,15 +77,20 @@ const result = await api.post('/data', payload)
 if (!result.ok) {
   const err = result.errors?.[0]
 
-  // HTTP errors have response body in metadata
-  if (err?.code.startsWith('HTTP_')) {
-    console.log('Server error response:', result.meta?.body)
-    console.log('Status code:', result.meta?.status)
+  // HTTP errors (4xx/5xx) - has response body
+  if (err?.code === 'HTTP_ERROR') {
+    console.log('HTTP error:', result.meta?.status)
+    console.log('Response:', result.meta?.body)
   }
 
-  // Network errors have no response
-  if (err?.code === 'NETWORK_ERROR') {
-    console.log('No response - connection failed')
+  // Network errors - no response
+  else if (err?.code === 'NETWORK_ERROR') {
+    console.log('Connection failed')
+  }
+
+  // Cancelled
+  else if (err?.code === 'REQUEST_CANCELLED') {
+    console.log('Cancelled by user')
   }
 }
 ```
