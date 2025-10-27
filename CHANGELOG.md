@@ -5,6 +5,87 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2] - 2025-10-27
+
+### Added
+
+- **HttpErrors Category** - New error category for HTTP status code errors
+  - Separate `HttpErrors` from `NetworkErrors` for semantic clarity
+  - HTTP errors = server responded with 4xx/5xx status (response available)
+  - Network errors = connection failed, timeout, cancelled (no response)
+  - Specific error codes: `HTTP_BAD_REQUEST` (400), `HTTP_UNAUTHORIZED` (401), `HTTP_FORBIDDEN` (403), `HTTP_NOT_FOUND` (404), `HTTP_INTERNAL_SERVER_ERROR` (500)
+  - Generic fallbacks: `HTTP_CLIENT_ERROR` (4xx), `HTTP_SERVER_ERROR` (5xx)
+
+### Changed
+
+- **HTTP Error Handling** - Simplified worker, smarter client
+  - Worker: Always returns `ok()` for all HTTP responses (2xx, 3xx, 4xx, 5xx)
+  - Worker: Only returns `err()` for network/timeout/cancel errors
+  - Client: Splits success/error based on HTTP status code (2xx/3xx = ok, 4xx/5xx = err)
+  - HTTP 4xx/5xx errors include response body in `result.meta` for debugging
+  - Cleaner separation: worker handles fetch, client handles HTTP semantics
+
+- **Error Message Handling** - Proper use of `defineError` defaults
+  - Specific errors (400, 401, 403, 404, 500) use default messages from `defineError`
+  - Generic errors (other 4xx/5xx) include status code in message: `HTTP 418`, `HTTP 503`
+  - No unnecessary message overrides for well-known status codes
+
+### Fixed
+
+- **Error Classification** - HTTP errors vs Network errors
+  - Previously: All 4xx/5xx treated as `NetworkErrors.HttpError`
+  - Now: 4xx/5xx use `HttpErrors` (server responded), network failures use `NetworkErrors`
+  - Response body parsing errors properly classified as `RequestErrors.ResponseParseFailed`
+
+### Documentation
+
+- Added comprehensive HTTP error handling guide to README
+- Examples showing how to differentiate HTTP errors from network errors
+- Migration guide for error code checking
+
+### Migration Guide
+
+**Error Code Changes:**
+
+```typescript
+// Before (v1.5.1)
+if (result.errors?.[0]?.code === 'HTTP_ERROR') {
+  // Could be 404, 500, or network error - unclear!
+}
+
+// After (v1.5.2)
+if (result.errors?.[0]?.code === 'HTTP_NOT_FOUND') {
+  console.log('Resource not found')
+  console.log('Error response:', result.meta?.body)
+}
+
+if (result.errors?.[0]?.code === 'NETWORK_ERROR') {
+  console.log('Connection failed - no internet?')
+  // No response body available
+}
+```
+
+**Accessing Error Response Body:**
+
+```typescript
+const result = await api.post('/data', payload)
+
+if (!result.ok) {
+  const err = result.errors?.[0]
+
+  // HTTP errors have response body in metadata
+  if (err?.code.startsWith('HTTP_')) {
+    console.log('Server error response:', result.meta?.body)
+    console.log('Status code:', result.meta?.status)
+  }
+
+  // Network errors have no response
+  if (err?.code === 'NETWORK_ERROR') {
+    console.log('No response - connection failed')
+  }
+}
+```
+
 ## [1.5.0] - 2025-10-26
 
 ### Added

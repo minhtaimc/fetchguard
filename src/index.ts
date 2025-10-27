@@ -32,6 +32,7 @@ export {
   AuthErrors,
   DomainErrors,
   NetworkErrors,
+  HttpErrors,
   RequestErrors
 } from './errors'
 

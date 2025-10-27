@@ -197,11 +197,16 @@ async function makeApiRequest(url: string, options: FetchGuardRequestInit = {}):
 
   // Get body as text or base64
   let body: string
-  if (isBinary) {
-    const buffer = await response.arrayBuffer()
-    body = arrayBufferToBase64(buffer)
-  } else {
-    body = await response.text()
+  try {
+    if (isBinary) {
+      const buffer = await response.arrayBuffer()
+      body = arrayBufferToBase64(buffer)
+    } else {
+      body = await response.text()
+    }
+  } catch (e) {
+    // Reading/parsing response body failed
+    return err(RequestErrors.ResponseParseFailed({ message: String(e) }))
   }
 
   // Extract headers if requested
@@ -212,9 +217,8 @@ async function makeApiRequest(url: string, options: FetchGuardRequestInit = {}):
     })
   }
 
-  return response.ok
-    ? ok({ body, status: response.status, contentType, headers: responseHeaders })
-    : err(NetworkErrors.HttpError({ message: `HTTP ${response.status}: ${body}` }))
+  const responseData = { body, status: response.status, contentType, headers: responseHeaders }
+  return ok(responseData)
 }
 
 /**
@@ -321,6 +325,7 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         if (result.isOkWithData()) {
           sendFetchResult(id, result.data)
         } else {
+          // Network/timeout/cancel error 
           const error = result.errors?.[0]
           const message = error?.message || 'Unknown error'
           const status = result.status

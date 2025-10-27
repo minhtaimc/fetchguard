@@ -511,7 +511,53 @@ if (res.isOk()) {
 }
 ```
 
-Grouped error helpers are exported: `GeneralErrors`, `InitErrors`, `AuthErrors`, `DomainErrors`, `NetworkErrors`, `RequestErrors`.
+Grouped error helpers are exported: `GeneralErrors`, `InitErrors`, `AuthErrors`, `DomainErrors`, `NetworkErrors`, `HttpErrors`, `RequestErrors`.
+
+### HTTP Errors vs Network Errors
+
+FetchGuard distinguishes between **HTTP errors** (server returned 4xx/5xx) and **Network errors** (connection failed):
+
+```ts
+const res = await api.post('/data', payload)
+
+if (res.isOk()) {
+  // HTTP 2xx/3xx - success
+  console.log('Success:', res.data.body)
+} else {
+  const err = res.errors?.[0]
+
+  // HTTP 4xx/5xx errors - server responded with error status
+  if (err?.code === 'HTTP_NOT_FOUND') {
+    console.log('Resource not found')
+  } else if (err?.code === 'HTTP_UNAUTHORIZED') {
+    console.log('Need to login')
+  } else if (err?.code === 'HTTP_SERVER_ERROR') {
+    console.log('Server error:', res.meta?.body) // Error response body available in metadata
+  }
+
+  // Network errors - connection failed, no response
+  else if (err?.code === 'NETWORK_ERROR') {
+    console.log('Connection failed - check internet')
+  } else if (err?.code === 'REQUEST_CANCELLED') {
+    console.log('Request was cancelled')
+  }
+}
+```
+
+**Available HTTP Error Codes:**
+- `HTTP_BAD_REQUEST` (400)
+- `HTTP_UNAUTHORIZED` (401)
+- `HTTP_FORBIDDEN` (403)
+- `HTTP_NOT_FOUND` (404)
+- `HTTP_INTERNAL_SERVER_ERROR` (500)
+- `HTTP_CLIENT_ERROR` (generic 4xx)
+- `HTTP_SERVER_ERROR` (generic 5xx)
+
+**Key Points:**
+- ✅ HTTP 4xx/5xx errors include response body in `result.meta` for debugging
+- ✅ Network errors have no response body (connection failed before server responded)
+- ✅ All HTTP responses (including errors) pass through the same `FETCH_RESULT` message
+- ✅ Client splits success/error based on status code for clean API
 
 ## Auth Methods and Events
 

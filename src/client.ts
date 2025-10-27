@@ -10,7 +10,7 @@ import type { MainToWorkerMessage } from './messages'
 import { ok, err, type Result } from 'ts-micro-result'
 import { MSG } from './messages'
 import { DEFAULT_REFRESH_EARLY_MS } from './constants'
-import { NetworkErrors } from './errors'
+import { NetworkErrors, HttpErrors } from './errors'
 import { serializeFormData, isFormData } from './utils/formdata'
 
 /**
@@ -117,30 +117,67 @@ export class FetchGuardClient {
   private handleWorkerMessage(event: MessageEvent): void {
     const { id, type, payload } = event.data
 
-    if (type === MSG.FETCH_RESULT || type === MSG.FETCH_ERROR) {
+    if (type === MSG.FETCH_RESULT) {
+      // FETCH_RESULT contains all HTTP responses (2xx, 3xx, 4xx, 5xx)
       const request = this.pendingRequests.get(id)
       if (!request) return
 
       this.pendingRequests.delete(id)
 
-      if (type === MSG.FETCH_RESULT) {
-        const status = payload?.status ?? 200
-        const headers = payload?.headers ?? {}
-        const body = String(payload?.body ?? '')
-        const contentType = String(payload?.contentType ?? 'application/octet-stream')
-        request.resolve(ok<ApiResponse>({ body, status, contentType, headers }))
-        return
-      }
+      const status = payload?.status
 
-      if (type === MSG.FETCH_ERROR) {
-        const status = typeof payload?.status === 'number' ? payload.status : undefined
-        if (typeof status === 'number') {
-          request.resolve(err(NetworkErrors.HttpError({ message: String(payload?.error || 'HTTP error') }), undefined, status))
+      // Split ok/err based on HTTP status
+      if (status >= 200 && status < 400) {
+        // HTTP 2xx/3xx = success
+        request.resolve(ok(payload))
+      } else {
+        // HTTP 4xx/5xx = error with response metadata
+        // Map to specific error types for common status codes
+        let httpError
+        if (status === 400) {
+          httpError = HttpErrors.BadRequest()
+        } else if (status === 401) {
+          httpError = HttpErrors.Unauthorized()
+        } else if (status === 403) {
+          httpError = HttpErrors.Forbidden()
+        } else if (status === 404) {
+          httpError = HttpErrors.NotFound()
+        } else if (status === 500) {
+          httpError = HttpErrors.InternalServerError()
+        } else if (status >= 400 && status < 500) {
+          // Generic 4xx - need status in message
+          httpError = HttpErrors.ClientError({ message: `HTTP ${status}` })
         } else {
-          request.resolve(err(NetworkErrors.NetworkError({ message: String(payload?.error || 'Network error') })))
+          // Generic 5xx - need status in message
+          httpError = HttpErrors.ServerError({ message: `HTTP ${status}` })
         }
-        return
+
+        request.resolve(err(
+          httpError,
+          {
+            body: String(payload?.body ?? ''),
+            headers: payload?.headers ?? {}
+          },
+          payload?.status
+        ))
       }
+      return
+    }
+
+    if (type === MSG.FETCH_ERROR) {
+      // Network/timeout/cancel errors (no HTTP response)
+      const request = this.pendingRequests.get(id)
+      if (!request) return
+
+      this.pendingRequests.delete(id)
+
+      const status = typeof payload?.status === 'number' ? payload.status : undefined
+      request.resolve(err(
+        NetworkErrors.NetworkError({ message: String(payload?.error || 'Network error') }),
+        undefined,
+        status
+      ))
+      return
     }
 
     if (type === MSG.ERROR) {
