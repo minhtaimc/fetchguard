@@ -5,15 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2025-12-30
+
+### Fixed
+
+- **Default Headers Now Applied to Auth Requests** - `defaultHeaders` now correctly applies to all auth requests (login, logout, refresh)
+  - Previously `defaultHeaders` only applied to regular API requests
+  - Now the header priority chain is consistent across all requests:
+    - `defaultHeaders` (from FetchGuardOptions)
+    - `headers` (from ProviderPresetConfig)
+    - `Content-Type: application/json` (for auth requests)
+
 ## [1.6.1] - 2025-12-30
 
 ### Added
 
 - **Default Headers for All Requests** - Add default headers to every request
   - New `defaultHeaders` option in `FetchGuardOptions`
-  - Headers are included in all API requests and auth requests
+  - Headers are included in all API requests
   - Per-request headers can override default headers
-  - Header priority: `defaultHeaders` < `provider.headers` < per-request headers
+  - Header priority: `defaultHeaders` < per-request headers
 
 ### Example
 

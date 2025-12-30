@@ -18,6 +18,7 @@ export function createCookieProvider(config: {
   loginUrl: string
   logoutUrl: string
   headers?: Record<string, string>
+  defaultHeaders?: Record<string, string>
 }): TokenProvider {
   return createProvider({
     refreshStorage: undefined,
@@ -39,6 +40,7 @@ export function createBodyProvider(config: {
   logoutUrl: string
   refreshTokenKey?: string
   headers?: Record<string, string>
+  defaultHeaders?: Record<string, string>
 }): TokenProvider {
   return createProvider({
     refreshStorage: createIndexedDBStorage('FetchGuardDB', config.refreshTokenKey || 'refreshToken'),

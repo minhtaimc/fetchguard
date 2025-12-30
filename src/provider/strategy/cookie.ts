@@ -10,16 +10,23 @@ import type { AuthStrategy } from '../../types'
  * Login URL can be:
  * - Configured once: loginUrl: 'https://api.example.com/auth/login'
  * - Passed per call: login(payload, 'https://...')
+ *
+ * Header priority (lowest to highest):
+ * - defaultHeaders (from FetchGuardOptions)
+ * - headers (from ProviderPresetConfig)
+ * - Content-Type: application/json
  */
 export function createCookieStrategy(config: {
   refreshUrl: string
   loginUrl: string
   logoutUrl: string
   headers?: Record<string, string>
+  defaultHeaders?: Record<string, string>
 }): AuthStrategy {
   const baseHeaders = {
-    'Content-Type': 'application/json',
-    ...config.headers
+    ...config.defaultHeaders,
+    ...config.headers,
+    'Content-Type': 'application/json'
   }
 
   return {

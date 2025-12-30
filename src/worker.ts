@@ -291,8 +291,8 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
           // Registry lookup
           provider = getProvider(providerConfig)
         } else if (providerConfig && typeof providerConfig === 'object' && 'type' in providerConfig) {
-          // ProviderPresetConfig object
-          provider = buildProviderFromPreset(providerConfig as ProviderPresetConfig)
+          // ProviderPresetConfig object - pass defaultHeaders for auth requests
+          provider = buildProviderFromPreset(providerConfig as ProviderPresetConfig, config.defaultHeaders)
         } else {
           sendSetupError('Invalid provider config')
           break
