@@ -155,6 +155,7 @@ async function makeApiRequest(url: string, options: FetchGuardRequestInit = {}):
   }
 
   const headers: Record<string, string> = {
+    ...(config.defaultHeaders || {}),
     ...(fetchOptions.headers as Record<string, string> || {})
   }
 

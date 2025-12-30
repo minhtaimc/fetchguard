@@ -365,6 +365,31 @@ const api = createClient({
 
 These headers will be included in every auth API call (login, logout, refresh token).
 
+**Default Headers for All Requests**
+
+You can also set default headers that will be included in ALL requests (both API calls and auth calls):
+
+```ts
+const api = createClient({
+  provider: { ... },
+  defaultHeaders: {
+    'X-Client-Version': '1.0.0',
+    'X-Platform': 'web',
+    'Accept-Language': 'en-US'
+  }
+})
+
+// All requests will include these headers
+await api.get('/users')       // has X-Client-Version, X-Platform, Accept-Language
+await api.post('/data', ...)  // has X-Client-Version, X-Platform, Accept-Language
+await api.login(...)          // has X-Client-Version, X-Platform, Accept-Language + auth headers
+```
+
+**Header Priority** (later overrides earlier):
+1. `defaultHeaders` (lowest priority)
+2. `provider.headers` (auth requests only)
+3. Per-request headers (highest priority)
+
 ### Advanced: Custom Providers via Registry
 
 For complex auth flows, you can create custom providers and register them:

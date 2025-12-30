@@ -63,7 +63,8 @@ export class FetchGuardClient {
   private async initializeWorker(options: FetchGuardOptions): Promise<void> {
     const config: WorkerConfig = {
       allowedDomains: options.allowedDomains || [],
-      refreshEarlyMs: options.refreshEarlyMs ?? DEFAULT_REFRESH_EARLY_MS
+      refreshEarlyMs: options.refreshEarlyMs ?? DEFAULT_REFRESH_EARLY_MS,
+      defaultHeaders: options.defaultHeaders || {}
     }
 
     // Serialize provider config based on type

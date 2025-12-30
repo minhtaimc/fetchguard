@@ -159,6 +159,9 @@ export interface FetchGuardOptions {
 
   /** Early refresh time for tokens (ms) */
   refreshEarlyMs?: number
+
+  /** Default headers to include in all requests */
+  defaultHeaders?: Record<string, string>
 }
 
 /**
@@ -167,6 +170,7 @@ export interface FetchGuardOptions {
 export interface WorkerConfig {
   allowedDomains: string[]
   refreshEarlyMs: number
+  defaultHeaders: Record<string, string>
 }
 
 /**

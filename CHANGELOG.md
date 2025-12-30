@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2025-12-30
+
+### Added
+
+- **Default Headers for All Requests** - Add default headers to every request
+  - New `defaultHeaders` option in `FetchGuardOptions`
+  - Headers are included in all API requests and auth requests
+  - Per-request headers can override default headers
+  - Header priority: `defaultHeaders` < `provider.headers` < per-request headers
+
+### Example
+
+```typescript
+const api = createClient({
+  provider: {
+    type: 'body-auth',
+    refreshUrl: 'https://api.example.com/auth/refresh',
+    loginUrl: 'https://api.example.com/auth/login',
+    logoutUrl: 'https://api.example.com/auth/logout',
+    headers: {
+      'X-Auth-Client': 'web-app'  // Auth requests only
+    }
+  },
+  defaultHeaders: {
+    'X-Client-Version': '1.0.0',
+    'X-Platform': 'web'  // All requests
+  }
+})
+```
+
 ## [1.6.0] - 2025-12-30
 
 ### Added
@@ -28,23 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed `tests/` directory
   - Removed `vitest.config.ts` and `vitest.browser.config.ts`
   - Removed test dependencies: vitest, @vitest/browser, @vitest/ui, happy-dom, playwright
-
-### Example
-
-```typescript
-const api = createClient({
-  provider: {
-    type: 'body-auth',
-    refreshUrl: 'https://api.example.com/auth/refresh',
-    loginUrl: 'https://api.example.com/auth/login',
-    logoutUrl: 'https://api.example.com/auth/logout',
-    headers: {
-      'X-Client-Version': '1.0.0',
-      'X-Platform': 'web'
-    }
-  }
-})
-```
 
 ## [1.5.5] - 2025-10-27
 
