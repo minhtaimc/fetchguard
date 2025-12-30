@@ -15,12 +15,18 @@ export function createCookieStrategy(config: {
   refreshUrl: string
   loginUrl: string
   logoutUrl: string
+  headers?: Record<string, string>
 }): AuthStrategy {
+  const baseHeaders = {
+    'Content-Type': 'application/json',
+    ...config.headers
+  }
+
   return {
     async refresh() {
       return fetch(config.refreshUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: baseHeaders,
         credentials: 'include'
       })
     },
@@ -28,7 +34,7 @@ export function createCookieStrategy(config: {
     async login(payload, url) {
       return fetch(url || config.loginUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: baseHeaders,
         body: JSON.stringify(payload),
         credentials: 'include'
       })
@@ -37,7 +43,7 @@ export function createCookieStrategy(config: {
     async logout(payload) {
       return fetch(config.logoutUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: baseHeaders,
         body: payload ? JSON.stringify(payload) : undefined,
         credentials: 'include'
       })

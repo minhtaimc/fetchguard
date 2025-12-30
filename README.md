@@ -344,6 +344,27 @@ const api = createClient({
 })
 ```
 
+**Custom Headers for Auth APIs**
+
+You can add custom headers to all auth requests (login, logout, refresh):
+
+```ts
+const api = createClient({
+  provider: {
+    type: 'body-auth',
+    refreshUrl: 'https://api.example.com/auth/refresh',
+    loginUrl: 'https://api.example.com/auth/login',
+    logoutUrl: 'https://api.example.com/auth/logout',
+    headers: {
+      'X-Client-Version': '1.0.0',
+      'X-Platform': 'web'
+    }
+  }
+})
+```
+
+These headers will be included in every auth API call (login, logout, refresh token).
+
 ### Advanced: Custom Providers via Registry
 
 For complex auth flows, you can create custom providers and register them:

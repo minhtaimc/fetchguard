@@ -1,6 +1,6 @@
 {
   "name": "fetchguard",
-  "version": "1.5.7",
+  "version": "1.6.0",
   "description": "A secure fetch API library that runs in Web Workers with automatic token management",
   "type": "module",
   "main": "dist/index.js",
@@ -23,12 +23,6 @@
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:node && npm run test:browser",
-    "test:node": "vitest run --config vitest.config.ts",
-    "test:watch": "vitest --config vitest.config.ts",
-    "test:ui": "vitest --config vitest.config.ts --ui",
-    "test:coverage": "vitest run --config vitest.config.ts --coverage",
-    "test:browser": "npm run build && vitest --config vitest.browser.config.ts --browser chromium",
     "prepublishOnly": "npm run build",
     "prepack": "npm run build"
   },
@@ -43,17 +37,11 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "ts-micro-result": "^2.1.10"
+    "ts-micro-result": "^2.2.0"
   },
   "devDependencies": {
-    "@vitest/browser": "^4.0.2",
-    "@vitest/browser-playwright": "^4.0.2",
-    "@vitest/ui": "^4.0.2",
-    "happy-dom": "^20.0.8",
-    "playwright": "^1.45.1",
-    "tsup": "^8.0.0",
-    "typescript": "^5.0.0",
-    "vitest": "^4.0.2"
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=16.0.0"

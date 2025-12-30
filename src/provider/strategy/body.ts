@@ -14,7 +14,13 @@ export function createBodyStrategy(config: {
   refreshUrl: string
   loginUrl: string
   logoutUrl: string
+  headers?: Record<string, string>
 }): AuthStrategy {
+  const baseHeaders = {
+    'Content-Type': 'application/json',
+    ...config.headers
+  }
+
   return {
     async refresh(refreshToken) {
       if (!refreshToken) {
@@ -23,7 +29,7 @@ export function createBodyStrategy(config: {
 
       return fetch(config.refreshUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: baseHeaders,
         body: JSON.stringify({ refreshToken }),
         credentials: 'include'
       })
@@ -32,7 +38,7 @@ export function createBodyStrategy(config: {
     async login(payload, url) {
       return fetch(url || config.loginUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: baseHeaders,
         body: JSON.stringify(payload),
         credentials: 'include'
       })
@@ -41,7 +47,7 @@ export function createBodyStrategy(config: {
     async logout(payload) {
       return fetch(config.logoutUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: baseHeaders,
         body: payload ? JSON.stringify(payload) : undefined,
         credentials: 'include'
       })

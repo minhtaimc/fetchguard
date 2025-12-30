@@ -11,7 +11,8 @@ export function buildProviderFromPreset(config: ProviderPresetConfig): TokenProv
       return createCookieProvider({
         refreshUrl: config.refreshUrl,
         loginUrl: config.loginUrl,
-        logoutUrl: config.logoutUrl
+        logoutUrl: config.logoutUrl,
+        headers: config.headers
       })
 
     case 'body-auth':
@@ -19,7 +20,8 @@ export function buildProviderFromPreset(config: ProviderPresetConfig): TokenProv
         refreshUrl: config.refreshUrl,
         loginUrl: config.loginUrl,
         logoutUrl: config.logoutUrl,
-        refreshTokenKey: config.refreshTokenKey
+        refreshTokenKey: config.refreshTokenKey,
+        headers: config.headers
       })
 
     default:

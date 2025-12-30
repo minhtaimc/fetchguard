@@ -138,6 +138,8 @@ export interface ProviderPresetConfig {
   loginUrl: string
   logoutUrl: string
   refreshTokenKey?: string
+  /** Custom headers to include in all auth requests (login, logout, refresh) */
+  headers?: Record<string, string>
 }
 
 /**

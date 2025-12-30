@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2025-12-30
+
+### Added
+
+- **Custom Headers for Auth APIs** - Add custom headers to all auth requests
+  - New `headers` option in `ProviderPresetConfig`
+  - Headers are included in login, logout, and refresh token requests
+  - Works with both `cookie-auth` and `body-auth` providers
+  - Example: `headers: { 'X-Client-Version': '1.0.0', 'X-Platform': 'web' }`
+
+### Changed
+
+- **Dependencies Updated**
+  - `ts-micro-result`: ^2.1.10 → ^2.2.0
+  - `tsup`: ^8.0.0 → ^8.5.1
+  - `typescript`: ^5.0.0 → ^5.9.3
+
+### Removed
+
+- **Test Suite Removed** - Removed Vitest test suite due to compatibility issues
+  - Removed `tests/` directory
+  - Removed `vitest.config.ts` and `vitest.browser.config.ts`
+  - Removed test dependencies: vitest, @vitest/browser, @vitest/ui, happy-dom, playwright
+
+### Example
+
+```typescript
+const api = createClient({
+  provider: {
+    type: 'body-auth',
+    refreshUrl: 'https://api.example.com/auth/refresh',
+    loginUrl: 'https://api.example.com/auth/login',
+    logoutUrl: 'https://api.example.com/auth/logout',
+    headers: {
+      'X-Client-Version': '1.0.0',
+      'X-Platform': 'web'
+    }
+  }
+})
+```
+
 ## [1.5.5] - 2025-10-27
 
 ### Added
