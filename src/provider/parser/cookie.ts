@@ -1,4 +1,5 @@
 import type { TokenParser } from '../../types'
+import { normalizeExpiresAt } from './normalize'
 
 /**
  * Cookie parser - parse access token from response body
@@ -10,7 +11,7 @@ export const cookieParser: TokenParser = {
     const json = await response.clone().json()
     return {
       token: json.data.accessToken,
-      expiresAt: json.data.expiresAt,
+      expiresAt: normalizeExpiresAt(json.data.expiresAt),
       user: json.data.user
     }
   }

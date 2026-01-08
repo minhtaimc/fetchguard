@@ -1,4 +1,5 @@
 import type { TokenParser } from '../../types'
+import { normalizeExpiresAt } from './normalize'
 
 /**
  * Body parser - parse token from response body (JSON)
@@ -10,7 +11,7 @@ export const bodyParser: TokenParser = {
     return {
       token: json.data.accessToken,
       refreshToken: json.data.refreshToken,
-      expiresAt: json.data.expiresAt,
+      expiresAt: normalizeExpiresAt(json.data.expiresAt),
       user: json.data.user
     }
   }

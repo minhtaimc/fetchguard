@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.3] - 2026-01-08
+
+### Fixed
+
+- **expiresAt Normalization** - Auto-convert `expiresAt` to milliseconds timestamp
+  - Supports multiple formats: milliseconds, seconds, ISO string
+  - Fixes issue where token refresh was triggered immediately after login
+  - Detection logic: values < 10^12 are treated as seconds and multiplied by 1000
+  - New utility: `normalizeExpiresAt()` in `src/provider/parser/normalize.ts`
+  - Applied to both `bodyParser` and `cookieParser`
+
+### Example
+
+```typescript
+// All these formats now work correctly:
+{ expiresAt: 1767860146000 }        // milliseconds - used as-is
+{ expiresAt: 1767860146 }           // seconds - converted to ms
+{ expiresAt: "2026-01-08T08:15:46.000Z" }  // ISO string - parsed to ms
+```
+
 ## [1.6.2] - 2025-12-30
 
 ### Fixed
