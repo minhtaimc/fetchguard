@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-21
+
+### Added
+
+- **Token Exchange** - Exchange current token for a new one with different context
+  - New `exchangeToken(url, options?, emitEvent?)` method on client
+  - Useful for: tenant switching, scope changes, user impersonation
+  - Supports `POST` (default) and `PUT` methods
+  - Reuses existing parser for response handling
+  - New `ExchangeTokenOptions` interface exported
+  - New `TOKEN_EXCHANGE_FAILED` error code
+
+### Example
+
+```typescript
+// Switch tenant
+const result = await api.exchangeToken('https://auth.example.com/auth/select-tenant', {
+  payload: { tenantId: 'tenant_123' }
+})
+
+// Change scope with PUT method
+const result = await api.exchangeToken('https://auth.example.com/auth/switch-context', {
+  method: 'PUT',
+  payload: { scope: 'admin' }
+})
+
+// Silent (no AUTH_STATE_CHANGED event)
+const result = await api.exchangeToken(url, options, false)
+
+if (result.ok) {
+  const { authenticated, user, expiresAt } = result.data
+  console.log('New token context:', user)
+}
+```
+
 ## [2.0.0] - 2026-01-21
 
 ### Breaking Changes

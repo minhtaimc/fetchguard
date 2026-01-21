@@ -26,6 +26,19 @@ export interface TokenInfo {
 }
 
 /**
+ * Options for token exchange operation
+ *
+ * Used when switching tenant, changing scope, or any operation
+ * that exchanges current token for a new one with different claims
+ */
+export interface ExchangeTokenOptions {
+  /** HTTP method to use. Default: 'POST' */
+  method?: 'POST' | 'PUT'
+  /** Payload to send with the request (e.g., tenantId, scope) */
+  payload?: Record<string, unknown>
+}
+
+/**
  * Auth result returned from auth operations and auth state changes
  * Used by: login(), logout(), refreshToken(), onAuthStateChanged()
  */
@@ -73,6 +86,23 @@ export interface TokenProvider {
    * @returns Result<TokenInfo> with all fields reset (token = '', refreshToken = undefined, user = undefined)
    */
   logout(payload?: unknown): Promise<Result<TokenInfo>>
+
+  /**
+   * Exchange current token for a new one with different context
+   *
+   * Useful for switching tenants, changing scopes, or any operation
+   * that requires exchanging the current token for a new one.
+   *
+   * @param accessToken - Current access token (injected by worker)
+   * @param url - URL to call for token exchange
+   * @param options - Exchange options (method, payload)
+   * @returns Result<TokenInfo> with new tokens
+   */
+  exchangeToken(
+    accessToken: string,
+    url: string,
+    options?: ExchangeTokenOptions
+  ): Promise<Result<TokenInfo>>
 
   /**
    * Custom auth methods (optional)

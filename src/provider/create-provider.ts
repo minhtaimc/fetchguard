@@ -3,7 +3,8 @@ import type {
   RefreshTokenStorage,
   TokenParser,
   AuthStrategy,
-  TokenInfo
+  TokenInfo,
+  ExchangeTokenOptions
 } from '../types'
 import { ok, err, type Result } from 'ts-micro-result'
 import { AuthErrors, RequestErrors } from '../errors'
@@ -44,7 +45,7 @@ export interface ProviderConfig {
  * - Custom methods will be spread into provider object
  */
 export function createProvider(config: ProviderConfig): TokenProvider {
-  const baseProvider: Pick<TokenProvider, 'refreshToken' | 'login' | 'logout'> = {
+  const baseProvider: Pick<TokenProvider, 'refreshToken' | 'login' | 'logout' | 'exchangeToken'> = {
     async refreshToken(refreshToken: string | null) {
       let currentRefreshToken = refreshToken
       if (currentRefreshToken === null && config.refreshStorage) {
@@ -120,6 +121,44 @@ export function createProvider(config: ProviderConfig): TokenProvider {
           expiresAt: undefined,
           user: null  // Explicitly clear user on logout
         })
+      } catch (error) {
+        return err(RequestErrors.NetworkError({ message: String(error) }))
+      }
+    },
+
+    async exchangeToken(accessToken: string, url: string, options: ExchangeTokenOptions = {}) {
+      const { method = 'POST', payload } = options
+
+      if (!accessToken) {
+        return err(AuthErrors.NotAuthenticated())
+      }
+
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+          },
+          body: payload ? JSON.stringify(payload) : undefined,
+          credentials: 'include'
+        })
+
+        if (!response.ok) {
+          const body = await response.text().catch(() => '')
+          return err(AuthErrors.TokenExchangeFailed(), { params: { body, status: response.status } })
+        }
+
+        const tokenInfo = await config.parser.parse(response)
+        if (!tokenInfo.token) {
+          return err(AuthErrors.TokenExchangeFailed({ message: 'No access token in response' }))
+        }
+
+        if (config.refreshStorage && tokenInfo.refreshToken) {
+          await config.refreshStorage.set(tokenInfo.refreshToken)
+        }
+
+        return ok(tokenInfo)
       } catch (error) {
         return err(RequestErrors.NetworkError({ message: String(error) }))
       }

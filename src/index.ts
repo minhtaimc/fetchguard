@@ -10,6 +10,7 @@ export type {
   AuthStrategy,
   FetchEnvelope,
   TokenInfo,
+  ExchangeTokenOptions,
   WorkerConfig,
   AuthResult,
   SerializedFormData,

@@ -29,6 +29,7 @@ export const InitErrors = {
  */
 export const AuthErrors = {
   TokenRefreshFailed: defineError(ERROR_CODES.TOKEN_REFRESH_FAILED, 'Token refresh failed'),
+  TokenExchangeFailed: defineError(ERROR_CODES.TOKEN_EXCHANGE_FAILED, 'Token exchange failed'),
   LoginFailed: defineError(ERROR_CODES.LOGIN_FAILED, 'Login failed'),
   LogoutFailed: defineError(ERROR_CODES.LOGOUT_FAILED, 'Logout failed'),
   NotAuthenticated: defineError(ERROR_CODES.NOT_AUTHENTICATED, 'User is not authenticated'),

@@ -849,6 +849,42 @@ export class FetchGuardClient {
   }
 
   /**
+   * Exchange current token for a new one with different context
+   *
+   * Useful for:
+   * - Switching tenants in multi-tenant apps
+   * - Changing authorization scope
+   * - Impersonating users (admin feature)
+   *
+   * @param url - URL to call for token exchange
+   * @param options - Exchange options (method, payload)
+   * @param emitEvent - Whether to emit AUTH_STATE_CHANGED event (default: true)
+   *
+   * @example
+   * // Switch tenant
+   * await api.exchangeToken('https://auth.example.com/auth/select-tenant', {
+   *   payload: { tenantId: 'tenant_123' }
+   * })
+   *
+   * // Change scope with PUT method
+   * await api.exchangeToken('https://auth.example.com/auth/switch-context', {
+   *   method: 'PUT',
+   *   payload: { scope: 'admin' }
+   * })
+   */
+  async exchangeToken(
+    url: string,
+    options?: { method?: 'POST' | 'PUT'; payload?: Record<string, unknown> },
+    emitEvent: boolean = true
+  ): Promise<Result<AuthResult>> {
+    const args: unknown[] = [url]
+    if (options) {
+      args.push(options)
+    }
+    return this.call('exchangeToken', emitEvent, ...args)
+  }
+
+  /**
    * Check if worker is ready
    */
   ready(): boolean {

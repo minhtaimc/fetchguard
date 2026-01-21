@@ -392,7 +392,13 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
             return
           }
 
-          const result = await provider[method](...args)
+          // Inject current access token for exchangeToken method
+          let methodArgs = args
+          if (method === 'exchangeToken') {
+            methodArgs = [accessToken, ...args]
+          }
+
+          const result = await provider[method](...methodArgs)
           if (!result.ok) {
             sendError(id, result)
             return

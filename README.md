@@ -273,6 +273,36 @@ await api.logout()
 unsubscribe()
 ```
 
+### Token Exchange (Tenant Switch, Scope Change)
+
+Exchange your current token for a new one with different context:
+
+```ts
+// Switch tenant
+const result = await api.exchangeToken('https://auth.example.com/auth/select-tenant', {
+  payload: { tenantId: 'tenant_123' }
+})
+
+// Change scope with PUT method
+const result = await api.exchangeToken('https://auth.example.com/auth/switch-context', {
+  method: 'PUT',
+  payload: { scope: 'admin' }
+})
+
+if (result.ok) {
+  const { authenticated, user, expiresAt } = result.data
+  console.log('New context:', user)
+} else {
+  // TOKEN_EXCHANGE_FAILED or NOT_AUTHENTICATED
+  console.error('Exchange failed:', result.errors[0].message)
+}
+```
+
+Use cases:
+- Multi-tenant apps: switch between tenants without re-login
+- Role/scope changes: elevate or reduce permissions
+- User impersonation: admin acting as another user
+
 ### Multiple Login URLs
 
 FetchGuard supports dynamic login URL selection for different auth methods (OAuth, phone, etc.):
@@ -627,9 +657,10 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
 - `cancel(id)`: Cancel pending request
 
 **Authentication:**
-- `login(payload?, emitEvent?)`: `Promise<Result<AuthResult>>` - Login with optional event emission (default: true)
+- `login(payload?, url?, emitEvent?)`: `Promise<Result<AuthResult>>` - Login with optional URL override and event emission (default: true)
 - `logout(payload?, emitEvent?)`: `Promise<Result<AuthResult>>` - Logout with optional event emission (default: true)
 - `refreshToken(emitEvent?)`: `Promise<Result<AuthResult>>` - Refresh access token with optional event emission (default: true)
+- `exchangeToken(url, options?, emitEvent?)`: `Promise<Result<AuthResult>>` - Exchange current token for new one (tenant switch, scope change)
 - `call(method, emitEvent?, ...args)`: `Promise<Result<AuthResult>>` - Call custom provider methods with event emission
 
 **Events:**
@@ -823,6 +854,7 @@ if (!result.ok) {
 **Available Auth Error Codes:**
 - `LOGIN_FAILED` - Login failed with HTTP status and response body in `meta.params`
 - `TOKEN_REFRESH_FAILED` - Token refresh failed with HTTP status and response body
+- `TOKEN_EXCHANGE_FAILED` - Token exchange failed with HTTP status and response body
 - `LOGOUT_FAILED` - Logout failed with HTTP status and response body
 - `NOT_AUTHENTICATED` - User is not authenticated (attempted auth-required request without token)
 

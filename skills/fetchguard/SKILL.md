@@ -1,9 +1,9 @@
 ---
 name: fetchguard
-description: FetchGuard v2.0.0 usage guide. Use when implementing secure API calls with Web Worker token isolation, handling auth flows (login/logout/refresh), or working with Result-based responses.
+description: FetchGuard v2.1.0 usage guide. Use when implementing secure API calls with Web Worker token isolation, handling auth flows (login/logout/refresh/exchange), or working with Result-based responses.
 ---
 
-# FetchGuard v2.0.0
+# FetchGuard v2.1.0
 
 Secure API proxy that isolates tokens in Web Worker IIFE closure. Protects against XSS token theft.
 
@@ -169,6 +169,29 @@ if (result.ok) {
 }
 ```
 
+### Token Exchange (Tenant Switch, Scope Change)
+
+```ts
+// Switch tenant
+const result = await api.exchangeToken('https://auth.example.com/auth/select-tenant', {
+  payload: { tenantId: 'tenant_123' }
+})
+
+// Change scope with PUT method
+const result = await api.exchangeToken('https://auth.example.com/auth/switch-context', {
+  method: 'PUT',
+  payload: { scope: 'admin' }
+})
+
+// Silent (no AUTH_STATE_CHANGED event)
+const result = await api.exchangeToken(url, options, false)
+
+if (result.ok) {
+  const { authenticated, user, expiresAt } = result.data
+  console.log('New context:', user)
+}
+```
+
 ### Auth State Subscription
 
 ```ts
@@ -252,6 +275,7 @@ ERROR_CODES.REQUEST_TIMEOUT    // Request timed out
 ERROR_CODES.LOGIN_FAILED
 ERROR_CODES.LOGOUT_FAILED
 ERROR_CODES.TOKEN_REFRESH_FAILED
+ERROR_CODES.TOKEN_EXCHANGE_FAILED
 ERROR_CODES.NOT_AUTHENTICATED
 
 // Other
@@ -434,6 +458,101 @@ const unsubscribe = api.onReady(() => {
 })
 ```
 
+## ApiService Wrapper Pattern
+
+When backend returns `Result<T>` format (`{ ok, data, errors, meta }`), create an ApiService layer:
+
+```ts
+import { createClient, ERROR_CODES } from 'fetchguard'
+import type { FetchEnvelope } from 'fetchguard'
+import { ok, err, type Result, type ErrorDetail } from 'ts-micro-result'
+
+// Transform FetchEnvelope to Result<T>
+function transformResponse<T>(result: Result<FetchEnvelope>): Result<T> {
+  // Network error
+  if (!result.ok) {
+    const code = result.errors[0]?.code
+    if (code === ERROR_CODES.NETWORK_ERROR) {
+      return err({ code: 'NETWORK_ERROR', message: 'Connection failed' })
+    }
+    return err(result.errors)
+  }
+
+  const { status, body } = result.data
+
+  // 5xx: System error (fallback if not Result format)
+  if (status >= 500) {
+    const parsed = deserializeResult<T>(body)
+    if (!parsed.ok) return parsed
+    return err({ code: 'SERVER_ERROR', message: `Server error: ${status}` })
+  }
+
+  // 2xx-4xx: Trust backend Result
+  return deserializeResult<T>(body)
+}
+
+// Deserialize JSON to Result<T>
+function deserializeResult<T>(json: string): Result<T> {
+  try {
+    const parsed = JSON.parse(json)
+    if (parsed.ok === true) return ok(parsed.data, parsed.meta)
+    if (parsed.ok === false) return err(parsed.errors, parsed.meta)
+    return ok(parsed as T)  // Raw JSON fallback
+  } catch {
+    return err({ code: 'PARSE_ERROR', message: 'Invalid JSON' })
+  }
+}
+
+// Usage
+class ApiService {
+  async get<T>(url: string): Promise<Result<T>> {
+    const result = await api.get(url)
+    return transformResponse<T>(result)
+  }
+}
+```
+
+### Login Error Handling
+
+When login fails, FetchGuard returns `err()` with `meta.params` containing the raw HTTP response:
+
+```ts
+// FetchGuard internally does:
+// return err(AuthErrors.LoginFailed(), { params: { body, status } })
+//
+// So result.meta.params = { body: string, status: number }
+```
+
+Propagate backend errors instead of creating generic ones:
+
+```ts
+async login(credentials): Promise<Result<User>> {
+  const result = await api.login(credentials)
+
+  if (result.ok && result.data.authenticated) {
+    return await this.fetchProfile()
+  }
+
+  // Login failed - extract backend response from meta.params
+  if (!result.ok) {
+    // meta.params contains raw HTTP response: { body: string, status: number }
+    const params = result.meta?.params as { body?: string; status?: number } | undefined
+
+    if (params?.body) {
+      // Parse backend's Result format to get actual errors
+      const parsed = deserializeResult<User>(params.body)
+      if (!parsed.ok) return parsed  // Forward backend errors with their meta
+    }
+
+    // No parseable body - forward FetchGuard errors
+    return err(result.errors)
+  }
+
+  // result.ok but not authenticated (edge case)
+  return err({ code: 'LOGIN_FAILED', message: 'Authentication failed' })
+}
+```
+
 ## Important Notes
 
 1. **Tokens never leave Worker** - Protected from XSS
@@ -443,3 +562,4 @@ const unsubscribe = api.onReady(() => {
 5. **Domain allowlist** - Prevents token exfiltration to unknown hosts
 6. **No interceptors** - Debug hooks are observe-only (security)
 7. **Full URLs required** - No baseUrl config, always use absolute URLs
+8. **ApiService boundary** - Transform FetchEnvelope to domain Result at service layer
