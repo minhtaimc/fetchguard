@@ -289,6 +289,12 @@ const result = await api.exchangeToken('https://auth.example.com/auth/switch-con
   payload: { scope: 'admin' }
 })
 
+// With custom headers (overrides defaultHeaders)
+const result = await api.exchangeToken('https://auth.example.com/auth/impersonate', {
+  payload: { userId: 'user_456' },
+  headers: { 'X-Impersonate-Reason': 'support-ticket-123' }
+})
+
 if (result.ok) {
   const { authenticated, user, expiresAt } = result.data
   console.log('New context:', user)

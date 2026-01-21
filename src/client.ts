@@ -857,7 +857,7 @@ export class FetchGuardClient {
    * - Impersonating users (admin feature)
    *
    * @param url - URL to call for token exchange
-   * @param options - Exchange options (method, payload)
+   * @param options - Exchange options (method, payload, headers)
    * @param emitEvent - Whether to emit AUTH_STATE_CHANGED event (default: true)
    *
    * @example
@@ -871,10 +871,16 @@ export class FetchGuardClient {
    *   method: 'PUT',
    *   payload: { scope: 'admin' }
    * })
+   *
+   * // With custom headers (overrides defaultHeaders)
+   * await api.exchangeToken('https://auth.example.com/auth/impersonate', {
+   *   payload: { userId: 'user_456' },
+   *   headers: { 'X-Impersonate-Reason': 'support-ticket-123' }
+   * })
    */
   async exchangeToken(
     url: string,
-    options?: { method?: 'POST' | 'PUT'; payload?: Record<string, unknown> },
+    options?: { method?: 'POST' | 'PUT'; payload?: Record<string, unknown>; headers?: Record<string, string> },
     emitEvent: boolean = true
   ): Promise<Result<AuthResult>> {
     const args: unknown[] = [url]

@@ -57,11 +57,12 @@ export function createCookieStrategy(config: {
     },
 
     async exchangeToken(accessToken: string, url: string, options: ExchangeTokenOptions = {}) {
-      const { method = 'POST', payload } = options
+      const { method = 'POST', payload, headers } = options
       return fetch(url, {
         method,
         headers: {
           ...baseHeaders,
+          ...headers,
           'Authorization': `Bearer ${accessToken}`
         },
         body: payload ? JSON.stringify(payload) : undefined,

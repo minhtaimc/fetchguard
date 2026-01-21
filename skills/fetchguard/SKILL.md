@@ -1,9 +1,9 @@
 ---
 name: fetchguard
-description: FetchGuard v2.1.1 usage guide. Use when implementing secure API calls with Web Worker token isolation, handling auth flows (login/logout/refresh/exchange), or working with Result-based responses.
+description: FetchGuard v2.1.2 usage guide. Use when implementing secure API calls with Web Worker token isolation, handling auth flows (login/logout/refresh/exchange), or working with Result-based responses.
 ---
 
-# FetchGuard v2.1.1
+# FetchGuard v2.1.2
 
 Secure API proxy that isolates tokens in Web Worker IIFE closure. Protects against XSS token theft.
 
@@ -181,6 +181,12 @@ const result = await api.exchangeToken('https://auth.example.com/auth/select-ten
 const result = await api.exchangeToken('https://auth.example.com/auth/switch-context', {
   method: 'PUT',
   payload: { scope: 'admin' }
+})
+
+// With custom headers (overrides defaultHeaders)
+const result = await api.exchangeToken('https://auth.example.com/auth/impersonate', {
+  payload: { userId: 'user_456' },
+  headers: { 'X-Impersonate-Reason': 'support-ticket-123' }
 })
 
 // Silent (no AUTH_STATE_CHANGED event)

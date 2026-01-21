@@ -36,6 +36,8 @@ export interface ExchangeTokenOptions {
   method?: 'POST' | 'PUT'
   /** Payload to send with the request (e.g., tenantId, scope) */
   payload?: Record<string, unknown>
+  /** Custom headers for this request. Overrides defaultHeaders if same key. */
+  headers?: Record<string, string>
 }
 
 /**
