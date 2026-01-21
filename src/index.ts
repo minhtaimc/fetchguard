@@ -8,7 +8,7 @@ export type {
   RefreshTokenStorage,
   TokenParser,
   AuthStrategy,
-  ApiResponse,
+  FetchEnvelope,
   TokenInfo,
   WorkerConfig,
   AuthResult,

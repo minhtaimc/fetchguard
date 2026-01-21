@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import type { WorkerConfig, ApiResponse, TokenProvider, FetchGuardRequestInit, ProviderPresetConfig } from './types'
+import type { WorkerConfig, FetchEnvelope, TokenProvider, FetchGuardRequestInit, ProviderPresetConfig } from './types'
 import type { MainToWorkerMessage } from './messages'
 import { ok, err, type Result } from 'ts-micro-result'
 import { MSG } from './messages'
@@ -67,7 +67,7 @@ async function ensureValidToken(): Promise<Result<string>> {
 
       const valueRes = await provider.refreshToken(refreshToken)
 
-      if (valueRes.isError()) {
+      if (!valueRes.ok) {
         setTokenState({ token: null, expiresAt: null, user: undefined, refreshToken: undefined })
         return err(valueRes.errors)
       }
@@ -135,7 +135,7 @@ function validateDomain(url: string): boolean {
 /**
  * Make API request with proactive token management
  */
-async function makeApiRequest(url: string, options: FetchGuardRequestInit = {}): Promise<Result<ApiResponse>> {
+async function makeApiRequest(url: string, options: FetchGuardRequestInit = {}): Promise<Result<FetchEnvelope>> {
   if (!config) {
     return err(InitErrors.NotInitialized())
   }
@@ -168,7 +168,7 @@ async function makeApiRequest(url: string, options: FetchGuardRequestInit = {}):
 
   if (requiresAuth) {
     const tokenRes = await ensureValidToken()
-    if (tokenRes.isError()) {
+    if (!tokenRes.ok) {
       // Propagate error - cast to correct return type
       return err(tokenRes.errors)
     }
@@ -322,14 +322,13 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         const merged: RequestInit = { ...(options || {}), signal: controller.signal }
         const result = await makeApiRequest(url, merged)
 
-        if (result.isOkWithData()) {
+        if (result.ok) {
           sendFetchResult(id, result.data)
         } else {
-          // Network/timeout/cancel error 
-          const error = result.errors?.[0]
+          // Network/timeout/cancel error
+          const error = result.errors[0]
           const message = error?.message || 'Unknown error'
-          const status = result.status
-          sendFetchError(id, message, status)
+          sendFetchError(id, message, undefined)
         }
 
         pendingControllers.delete(id)
@@ -357,7 +356,7 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
         }
 
         const result = await provider[method](...args)
-        if (result.isError()) {
+        if (!result.ok) {
           sendError(id, result)
           break
         }

@@ -2,12 +2,12 @@ import type {
   FetchGuardOptions,
   FetchGuardRequestInit,
   WorkerConfig,
-  ApiResponse,
+  FetchEnvelope,
   ProviderPresetConfig,
   AuthResult
 } from './types'
 import type { MainToWorkerMessage } from './messages'
-import { ok, err, type Result, fromJSON } from 'ts-micro-result'
+import { ok, err, type Result } from 'ts-micro-result'
 import { MSG } from './messages'
 import { DEFAULT_REFRESH_EARLY_MS } from './constants'
 import { RequestErrors } from './errors'
@@ -31,7 +31,7 @@ export class FetchGuardClient {
   private worker: Worker
   private messageId = 0
   // Using unknown because different messages have different response types
-  // (ApiResponse for FETCH, AuthResult for AUTH_CALL, etc.)
+  // (FetchEnvelope for FETCH, AuthResult for AUTH_CALL, etc.)
   private pendingRequests = new Map<string, {
     resolve: (value: unknown) => void
     reject: (error: Error) => void
@@ -119,29 +119,13 @@ export class FetchGuardClient {
     const { id, type, payload } = event.data
 
     if (type === MSG.FETCH_RESULT) {
-      // FETCH_RESULT contains all HTTP responses (2xx, 3xx, 4xx, 5xx)
+      // FETCH_RESULT contains FetchEnvelope (raw HTTP response)
+      // Worker doesn't judge HTTP status - client receives envelope as-is
       const request = this.pendingRequests.get(id)
       if (!request) return
 
       this.pendingRequests.delete(id)
-
-      const status = payload?.status
-
-      // Split ok/err based on HTTP status
-      if (status >= 200 && status < 400) {
-        // HTTP 2xx/3xx = success
-        request.resolve(ok(payload))
-      } else {
-        // HTTP 4xx/5xx = error with response metadata
-        request.resolve(err(
-          RequestErrors.HttpError({ status }),
-          {
-            body: String(payload?.body ?? ''),
-            headers: payload?.headers ?? {}
-          },
-          payload?.status
-        ))
-      }
+      request.resolve(ok(payload as FetchEnvelope))
       return
     }
 
@@ -152,11 +136,8 @@ export class FetchGuardClient {
 
       this.pendingRequests.delete(id)
 
-      const status = typeof payload?.status === 'number' ? payload.status : undefined
       request.resolve(err(
-        RequestErrors.NetworkError({ message: String(payload?.error || 'Network error') }),
-        undefined,
-        status
+        RequestErrors.NetworkError({ message: String(payload?.error || 'Network error') })
       ))
       return
     }
@@ -167,7 +148,7 @@ export class FetchGuardClient {
 
       this.pendingRequests.delete(id)
 
-      request.resolve(err(payload.errors, payload.meta, payload.status))
+      request.resolve(err(payload.errors, payload.meta))
       return
     }
 
@@ -243,7 +224,7 @@ export class FetchGuardClient {
   /**
    * Make API request
    */
-  async fetch(url: string, options: FetchGuardRequestInit = {}): Promise<Result<ApiResponse>> {
+  async fetch(url: string, options: FetchGuardRequestInit = {}): Promise<Result<FetchEnvelope>> {
     const { result } = this.fetchWithId(url, options)
     return result
   }
@@ -255,15 +236,15 @@ export class FetchGuardClient {
    */
   fetchWithId(url: string, options: FetchGuardRequestInit = {}): {
     id: string
-    result: Promise<Result<ApiResponse>>
+    result: Promise<Result<FetchEnvelope>>
     cancel: () => void
   } {
     const id = this.generateMessageId()
 
     // Serialize FormData if present (async operation)
-    const result = new Promise<Result<ApiResponse>>(async (resolve, reject) => {
+    const result = new Promise<Result<FetchEnvelope>>(async (resolve, reject) => {
       this.pendingRequests.set(id, {
-        resolve: (response) => resolve(response as Result<ApiResponse>),
+        resolve: (response) => resolve(response as Result<FetchEnvelope>),
         reject: (error) => reject(error)
       })
 
@@ -320,11 +301,11 @@ export class FetchGuardClient {
   /**
    * Convenience methods
    */
-  async get(url: string, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
+  async get(url: string, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<FetchEnvelope>> {
     return this.fetch(url, { ...options, method: 'GET' })
   }
 
-  async post(url: string, body?: unknown, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
+  async post(url: string, body?: unknown, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<FetchEnvelope>> {
     // If body is FormData, use fetch directly (no JSON.stringify)
     if (body && isFormData(body)) {
       return this.fetch(url, {
@@ -350,7 +331,7 @@ export class FetchGuardClient {
     })
   }
 
-  async put(url: string, body?: unknown, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
+  async put(url: string, body?: unknown, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<FetchEnvelope>> {
     // If body is FormData, use fetch directly (no JSON.stringify)
     if (body && isFormData(body)) {
       return this.fetch(url, {
@@ -376,11 +357,11 @@ export class FetchGuardClient {
     })
   }
 
-  async delete(url: string, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
+  async delete(url: string, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<FetchEnvelope>> {
     return this.fetch(url, { ...options, method: 'DELETE' })
   }
 
-  async patch(url: string, body?: unknown, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<ApiResponse>> {
+  async patch(url: string, body?: unknown, options: Omit<FetchGuardRequestInit, 'method' | 'body'> = {}): Promise<Result<FetchEnvelope>> {
     // If body is FormData, use fetch directly (no JSON.stringify)
     if (body && isFormData(body)) {
       return this.fetch(url, {

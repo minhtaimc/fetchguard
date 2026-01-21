@@ -184,18 +184,23 @@ export interface FetchGuardRequestInit extends RequestInit {
 }
 
 /**
- * API response structure
+ * Fetch envelope - raw HTTP response from worker
+ *
+ * Worker only fetches and returns raw data, does NOT judge HTTP status.
+ * Client receives envelope and decides ok/err based on business logic.
+ *
+ * - status: HTTP status code (2xx, 3xx, 4xx, 5xx)
  * - body: string (text/JSON) or base64 (binary)
  * - contentType: always present, indicates how to decode body
  * - headers: empty object if includeHeaders: false
- * - status: HTTP status code
  */
-export interface ApiResponse {
-  body: string
+export interface FetchEnvelope {
   status: number
+  body: string
   contentType: string
   headers: Record<string, string>
 }
+
 
 /**
  * Serialized file data for transfer over postMessage

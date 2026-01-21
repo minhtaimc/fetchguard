@@ -5,6 +5,103 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-01-21
+
+### Breaking Changes
+
+- **BREAKING**: Renamed `ApiResponse` to `FetchEnvelope`
+  - More semantic name: Worker returns envelope, doesn't judge HTTP status
+  - Update imports: `import type { FetchEnvelope } from 'fetchguard'`
+
+- **BREAKING**: Worker no longer judges HTTP status
+  - Previously: Worker split 2xx/3xx → `ok()`, 4xx/5xx → `err()`
+  - Now: Worker returns `ok(FetchEnvelope)` for ALL HTTP responses (2xx-5xx)
+  - Worker only returns `err()` for network failures (connection error, timeout, cancelled)
+  - Consumer code decides business logic based on `envelope.status`
+
+- **BREAKING**: Upgraded `ts-micro-result` from v2 to v3.3.0
+  - `.isError()` → `!result.ok`
+  - `.isOkWithData()` → `result.ok`
+  - `result.status` removed - use `envelope.status` instead
+  - `defineError()` no longer accepts status parameter
+  - `err()` only accepts 1-2 arguments (error, meta?)
+  - Custom metadata now uses `meta.params` instead of custom fields
+
+### Changed
+
+- **FetchEnvelope Structure** - Unchanged, only renamed from `ApiResponse`
+  ```typescript
+  interface FetchEnvelope {
+    status: number        // HTTP status (2xx, 3xx, 4xx, 5xx)
+    body: string          // Text/JSON or base64 (for binary)
+    contentType: string   // Content type header
+    headers: Record<string, string>  // Response headers (if includeHeaders: true)
+  }
+  ```
+
+- **Error Metadata** - Now uses `params` for custom data
+  ```typescript
+  // v1.x
+  err(AuthErrors.LoginFailed(), { body, status })
+
+  // v2.0
+  err(AuthErrors.LoginFailed(), { params: { body, status } })
+  ```
+
+### Migration Guide
+
+**1. Update imports:**
+```typescript
+// Before (v1.x)
+import type { ApiResponse } from 'fetchguard'
+
+// After (v2.0)
+import type { FetchEnvelope } from 'fetchguard'
+```
+
+**2. Update fetch result handling:**
+```typescript
+// Before (v1.x) - Worker judged HTTP status
+const result = await api.get('/users/123')
+if (result.ok) {
+  // 2xx/3xx response
+  const data = JSON.parse(result.data.body)
+} else {
+  // 4xx/5xx or network error
+  if (result.errors[0].code === 'HTTP_ERROR') {
+    const status = result.meta?.params?.status
+  }
+}
+
+// After (v2.0) - Consumer judges HTTP status
+const result = await api.get('/users/123')
+if (result.ok) {
+  const envelope = result.data
+  if (envelope.status >= 200 && envelope.status < 400) {
+    // Success response
+    const data = JSON.parse(envelope.body)
+  } else {
+    // HTTP error (4xx/5xx)
+    console.log('HTTP error:', envelope.status)
+    console.log('Body:', envelope.body)
+  }
+} else {
+  // Network error only
+  console.log('Network error:', result.errors[0].message)
+}
+```
+
+**3. Update ts-micro-result usage:**
+```typescript
+// Before (v1.x)
+if (result.isError()) { ... }
+if (result.isOkWithData()) { ... }
+
+// After (v2.0)
+if (!result.ok) { ... }
+if (result.ok) { ... }
+```
+
 ## [1.6.3] - 2026-01-08
 
 ### Fixed

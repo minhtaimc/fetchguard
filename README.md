@@ -1,12 +1,14 @@
 # FetchGuard
 
 [![npm version](https://img.shields.io/npm/v/fetchguard.svg)](https://www.npmjs.com/package/fetchguard)
-![npm bundle size](https://img.shields.io/bundlephobia/min/fetchguard)
 [![npm downloads](https://img.shields.io/npm/dm/fetchguard.svg)](https://www.npmjs.com/package/fetchguard)
 [![license](https://img.shields.io/npm/l/fetchguard.svg)](https://github.com/minhtaimc/fetchguard/blob/main/LICENSE)
 
 
 FetchGuard is a secure, type-safe API client that runs your network requests inside a Web Worker. Access tokens never touch the main thread, reducing XSS risk while providing automatic token refresh, domain allow-listing, and a clean Result-based API.
+
+> **FetchGuard is a transport & security gateway, not an API client nor a business SDK.**
+
 
 ## Why FetchGuard
 
@@ -17,6 +19,33 @@ FetchGuard is a secure, type-safe API client that runs your network requests ins
 - Public endpoints: opt out per request with `requiresAuth: false`.
 - Domain allow-list: block requests to unexpected hosts (wildcards and ports supported).
 - FormData support: automatic serialization for file uploads through the Worker.
+
+
+## Comparison with Alternatives
+
+| Feature | FetchGuard | axios | ky | ofetch |
+|---------|-----------|-------|-----|--------|
+| XSS Token Protection | Worker + IIFE closure | None | None | None |
+| Result Pattern | `ts-micro-result` | throw | throw | throw |
+| Auto Token Refresh | Proactive (before expiry) | Manual | Manual | Manual |
+| Domain Whitelist | Built-in | None | None | None |
+| Bundle Size | ~10KB | ~30KB | ~8KB | ~5KB |
+
+**Key differentiator:** FetchGuard is the only library that isolates tokens in a Web Worker IIFE closure, making them inaccessible to XSS attacks on the main thread.
+
+## When to Use FetchGuard
+
+**Good fit:**
+- SPAs that need to protect tokens from XSS attacks
+- Apps requiring automatic token refresh without UI flicker
+- Projects that prefer Result-based error handling over try/catch
+- Teams wanting domain-level request restrictions
+
+**Not ideal for:**
+- Server-side rendering (Web Workers don't run on the server)
+- High-throughput scenarios requiring many concurrent requests
+- Apps needing streaming responses (SSE/WebSocket)
+- Legacy browser support (requires Web Worker)
 
 ## Architecture (Simplified)
 
@@ -127,12 +156,18 @@ const api = createClient({
 })
 
 type User = { id: string; name: string }
-const res = await api.get<User[]>('https://api.example.com/users')
+const result = await api.get('https://api.example.com/users')
 
-if (res.isOk()) {
-  console.log('Users:', res.data)
+if (result.ok) {
+  const envelope = result.data
+  if (envelope.status >= 200 && envelope.status < 400) {
+    const users: User[] = JSON.parse(envelope.body)
+    console.log('Users:', users)
+  } else {
+    console.error('HTTP error:', envelope.status, envelope.body)
+  }
 } else {
-  console.error('Error:', res.errors?.[0])
+  console.error('Network error:', result.errors[0].message)
 }
 
 // Cleanup
@@ -217,8 +252,8 @@ await api.get('/public/config', { requiresAuth: false })
 
 // Include response headers in the result
 const r = await api.get('/profile', { includeHeaders: true })
-if (r.isOk()) {
-  console.log(r.status, r.headers, r.data)
+if (r.ok) {
+  console.log(r.data.status, r.data.headers, r.data.body)
 }
 ```
 
@@ -249,8 +284,8 @@ const result = await api.fetch('https://api.example.com/upload', {
 await api.put('https://api.example.com/upload/123', formData)
 await api.patch('https://api.example.com/upload/123', formData)
 
-if (result.isOk()) {
-  console.log('Upload successful:', result.data)
+if (result.ok && result.data.status < 400) {
+  console.log('Upload successful:', result.data.body)
 }
 ```
 
@@ -531,8 +566,8 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
 - `onReady(callback)`: `() => void` - Subscribe to ready event (returns unsubscribe function)
 
 **HTTP Methods:**
-- `fetch(url, options?)`: `Promise<Result<ApiResponse>>`
-- `get/post/put/patch/delete(...)`: `Promise<Result<ApiResponse>>`
+- `fetch(url, options?)`: `Promise<Result<FetchEnvelope>>`
+- `get/post/put/patch/delete(...)`: `Promise<Result<FetchEnvelope>>`
 - `fetchWithId(url, options?)`: `{ id, result, cancel }`
 - `cancel(id)`: Cancel pending request
 
@@ -551,11 +586,13 @@ The library targets modern browsers with Web Worker and (optionally) IndexedDB s
 
 Types:
 
-- ApiResponse = { body: string; status: number; contentType: string; headers: Record<string, string> }
+- FetchEnvelope = { status: number; body: string; contentType: string; headers: Record<string, string> }
+  - `status`: HTTP status code (2xx, 3xx, 4xx, 5xx) - Worker returns ALL HTTP responses
   - `body`: Raw string (text/JSON) or base64 (for binary content like images, PDFs)
   - `contentType`: Content type header (always present, e.g., 'application/json', 'image/png')
   - Use `isBinaryContentType(contentType)` to detect binary responses
   - Use `base64ToArrayBuffer(body)` to decode binary data
+  - **Note:** Worker no longer judges HTTP status. Consumer code should check `envelope.status` to determine success/error.
 - AuthResult = { authenticated: boolean; user?: unknown; expiresAt?: number | null }
 - FetchGuardRequestInit extends RequestInit with:
   - requiresAuth?: boolean // default true
@@ -571,109 +608,119 @@ Types:
 
 ## Error Handling
 
-All methods return a `Result<T>` from `ts-micro-result`.
+All methods return a `Result<T>` from `ts-micro-result` v3.
 
 ```ts
-const res = await api.get('/users')
-if (res.isOk()) {
-  console.log(res.data)
+const result = await api.get('/users')
+if (result.ok) {
+  const envelope = result.data
+  // Check HTTP status - worker doesn't judge
+  if (envelope.status >= 200 && envelope.status < 400) {
+    console.log('Success:', JSON.parse(envelope.body))
+  } else {
+    console.log('HTTP error:', envelope.status, envelope.body)
+  }
 } else {
-  const err = res.errors?.[0]
-  console.warn(err?.code, err?.message)
+  // Network error only (connection failed, timeout, cancelled)
+  const err = result.errors[0]
+  console.warn(err.code, err.message)
 }
 ```
 
 Grouped error helpers are exported: `GeneralErrors`, `InitErrors`, `AuthErrors`, `DomainErrors`, `RequestErrors`.
 
-### Request Errors (HTTP & Network)
+### Request Handling (v2.0 - New Pattern)
 
-FetchGuard uses a unified `RequestErrors` category that includes both HTTP and network errors:
+In v2.0, the Worker returns ALL HTTP responses as `ok(FetchEnvelope)`. Only network failures return `err()`:
 
 ```ts
-const res = await api.post('/data', payload)
+const result = await api.post('/data', payload)
 
-if (res.isOk()) {
-  // HTTP 2xx/3xx - success
-  console.log('Success:', res.data.body)
-} else {
-  const err = res.errors?.[0]
+if (result.ok) {
+  const envelope = result.data
 
-  // HTTP errors (4xx/5xx) - server responded with error status
-  if (err?.code === 'HTTP_ERROR') {
-    const status = res.meta?.status
-    console.log(`HTTP ${status} error`)
-    console.log('Response body:', res.meta?.body)  // Debug server error response
+  // Success (2xx/3xx)
+  if (envelope.status >= 200 && envelope.status < 400) {
+    console.log('Success:', JSON.parse(envelope.body))
+  }
+  // HTTP errors (4xx/5xx) - still got a response!
+  else {
+    console.log(`HTTP ${envelope.status} error`)
+    console.log('Response body:', envelope.body)
 
-    // Check specific status codes if needed
-    if (status === 404) {
+    // Check specific status codes
+    if (envelope.status === 404) {
       console.log('Resource not found')
-    } else if (status === 401) {
+    } else if (envelope.status === 401) {
       console.log('Unauthorized - need to login')
+    } else if (envelope.status === 422) {
+      // Parse validation errors from server
+      const errors = JSON.parse(envelope.body)
+      console.log('Validation errors:', errors)
     }
   }
+} else {
+  // Network errors ONLY - no HTTP response received
+  const err = result.errors[0]
 
-  // Network errors - connection failed, no HTTP response
-  else if (err?.code === 'NETWORK_ERROR') {
+  if (err.code === 'NETWORK_ERROR') {
     console.log('Connection failed - check internet')
-  }
-
-  // Request cancelled by user
-  else if (err?.code === 'REQUEST_CANCELLED') {
+  } else if (err.code === 'REQUEST_CANCELLED') {
     console.log('Request was cancelled')
   }
 }
 ```
 
-**Available Request Error Codes:**
-- `HTTP_ERROR` - Server returned 4xx/5xx status (includes response body in `result.meta`)
+**Available Error Codes (network errors only):**
 - `NETWORK_ERROR` - Connection failed, timeout, or DNS error (no response)
 - `REQUEST_CANCELLED` - Request was cancelled via `cancel()` method
 - `RESPONSE_PARSE_FAILED` - Failed to read/parse response body
 
-**Key Points:**
-- ✅ Single `RequestErrors` category - easier to remember
-- ✅ HTTP errors include status code via `defineErrorAdvanced` (message: "HTTP 404 error")
-- ✅ HTTP error response body available in `result.meta` for debugging
-- ✅ Network errors have no response (connection failed before server responded)
-- ✅ Check `result.meta?.status` for specific HTTP status codes when needed
+**Key Points (v2.0):**
+- ✅ Worker returns `ok(envelope)` for ALL HTTP responses (2xx-5xx)
+- ✅ Worker returns `err()` ONLY for network failures
+- ✅ Consumer code decides what is "success" based on `envelope.status`
+- ✅ Full response body available for HTTP errors (validation errors, etc.)
+- ✅ Cleaner separation: transport errors vs business errors
 
 ### Auth Errors (Login/Refresh/Logout)
 
-Auth errors also include HTTP status and response body for detailed debugging:
+Auth errors include HTTP status and response body in `meta.params`:
 
 ```ts
 const result = await api.login({ email: 'wrong@example.com', password: 'wrong' })
 
-if (result.isError()) {
+if (!result.ok) {
   const error = result.errors[0]
+  const params = result.meta?.params as { body?: string; status?: number }
 
-  console.log('Status:', error.status)        // 401
+  console.log('Code:', error.code)            // 'LOGIN_FAILED'
   console.log('Message:', error.message)      // "Login failed"
-  console.log('Body:', error.meta?.body)      // '{"error": "Invalid credentials"}'
+  console.log('Status:', params?.status)      // 401
+  console.log('Body:', params?.body)          // '{"error": "Invalid credentials"}'
 
   // Parse JSON error details from server
   try {
-    const details = JSON.parse(error.meta?.body || '{}')
+    const details = JSON.parse(params?.body || '{}')
     console.log('Server error:', details.error)  // "Invalid credentials"
-    console.log('Details:', details.message)     // Additional error message
   } catch {
     // Not JSON - use raw body
-    console.log('Raw error:', error.meta?.body)
+    console.log('Raw error:', params?.body)
   }
 }
 ```
 
 **Available Auth Error Codes:**
-- `LOGIN_FAILED` - Login failed with HTTP status and response body in `error.meta.body`
+- `LOGIN_FAILED` - Login failed with HTTP status and response body in `meta.params`
 - `TOKEN_REFRESH_FAILED` - Token refresh failed with HTTP status and response body
 - `LOGOUT_FAILED` - Logout failed with HTTP status and response body
 - `NOT_AUTHENTICATED` - User is not authenticated (attempted auth-required request without token)
 
-**Key Points:**
-- ✅ Auth errors include HTTP status code in `error.status`
-- ✅ Response body available in `error.meta.body` (raw text/JSON string)
+**Key Points (v2.0):**
+- ✅ Auth errors use `meta.params` for custom data (ts-micro-result v3 pattern)
+- ✅ Response body available in `result.meta?.params?.body`
+- ✅ HTTP status available in `result.meta?.params?.status`
 - ✅ Parse JSON yourself if server returns structured error messages
-- ✅ Consistent pattern with fetch error handling
 
 ## Auth Methods and Events
 
@@ -700,7 +747,7 @@ await api.login(credentials)  // Same as above
 
 // Silent (no event - useful for checks)
 const result = await api.refreshToken(false)
-if (result.isOk()) {
+if (result.ok) {
   const { authenticated, expiresAt } = result.data
   // Check state without triggering listeners
 }

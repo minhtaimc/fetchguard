@@ -57,7 +57,7 @@ export function createProvider(config: ProviderConfig): TokenProvider {
         if (!response.ok) {
           // Read response body for error details
           const body = await response.text().catch(() => '')
-          return err(AuthErrors.TokenRefreshFailed(), { body }, response.status)
+          return err(AuthErrors.TokenRefreshFailed(), { params: { body, status: response.status } })
         }
 
         const tokenInfo = await config.parser.parse(response)
@@ -82,7 +82,7 @@ export function createProvider(config: ProviderConfig): TokenProvider {
         if (!response.ok) {
           // Read response body for error details
           const body = await response.text().catch(() => '')
-          return err(AuthErrors.LoginFailed(), { body }, response.status)
+          return err(AuthErrors.LoginFailed(), { params: { body, status: response.status } })
         }
 
         const tokenInfo = await config.parser.parse(response)
@@ -107,7 +107,7 @@ export function createProvider(config: ProviderConfig): TokenProvider {
         if (!response.ok) {
           // Read response body for error details
           const body = await response.text().catch(() => '')
-          return err(AuthErrors.LogoutFailed(), { body }, response.status)
+          return err(AuthErrors.LogoutFailed(), { params: { body, status: response.status } })
         }
 
         if (config.refreshStorage) {

@@ -5,7 +5,7 @@
 
 import type { WorkerToMainMessage } from './messages'
 import type { Result } from 'ts-micro-result'
-import type { AuthResult, ApiResponse } from './types'
+import type { AuthResult, FetchEnvelope } from './types'
 import { MSG } from './messages'
 
 /**
@@ -17,24 +17,26 @@ function post(message: WorkerToMainMessage): void {
 
 /**
  * Send error result (generic errors for auth operations, etc.)
- * Passes complete Result object with errors, status, and meta
+ * Passes complete Result object with errors and meta
  */
 export function sendError(id: string, result: Result<unknown>): void {
-  post({
-    type: MSG.ERROR,
-    id,
-    payload: { errors: result.errors, meta: result.meta, status: result.status }
-  } as any)
+  if (!result.ok) {
+    post({
+      type: MSG.ERROR,
+      id,
+      payload: { errors: result.errors, meta: result.meta }
+    } as any)
+  }
 }
 
 /**
- * Send successful fetch response
+ * Send fetch envelope (raw HTTP response, worker doesn't judge status)
  */
-export function sendFetchResult(id: string, response: ApiResponse): void {
+export function sendFetchResult(id: string, envelope: FetchEnvelope): void {
   post({
     type: MSG.FETCH_RESULT,
     id,
-    payload: response
+    payload: envelope
   } as any)
 }
 
