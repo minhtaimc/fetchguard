@@ -127,22 +127,12 @@ export function createProvider(config: ProviderConfig): TokenProvider {
     },
 
     async exchangeToken(accessToken: string, url: string, options: ExchangeTokenOptions = {}) {
-      const { method = 'POST', payload } = options
-
       if (!accessToken) {
         return err(AuthErrors.NotAuthenticated())
       }
 
       try {
-        const response = await fetch(url, {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`
-          },
-          body: payload ? JSON.stringify(payload) : undefined,
-          credentials: 'include'
-        })
+        const response = await config.strategy.exchangeToken(accessToken, url, options)
 
         if (!response.ok) {
           const body = await response.text().catch(() => '')

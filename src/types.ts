@@ -169,6 +169,14 @@ export interface AuthStrategy {
 
   /** Logout */
   logout(payload?: unknown): Promise<Response>
+
+  /**
+   * Exchange current token for a new one with different context
+   * @param accessToken - Current access token
+   * @param url - URL to call for token exchange
+   * @param options - Exchange options (method, payload)
+   */
+  exchangeToken(accessToken: string, url: string, options?: ExchangeTokenOptions): Promise<Response>
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { AuthStrategy } from '../../types'
+import type { AuthStrategy, ExchangeTokenOptions } from '../../types'
 
 /**
  * Cookie auth strategy - all auth operations via httpOnly cookies
@@ -51,6 +51,19 @@ export function createCookieStrategy(config: {
       return fetch(config.logoutUrl, {
         method: 'POST',
         headers: baseHeaders,
+        body: payload ? JSON.stringify(payload) : undefined,
+        credentials: 'include'
+      })
+    },
+
+    async exchangeToken(accessToken: string, url: string, options: ExchangeTokenOptions = {}) {
+      const { method = 'POST', payload } = options
+      return fetch(url, {
+        method,
+        headers: {
+          ...baseHeaders,
+          'Authorization': `Bearer ${accessToken}`
+        },
         body: payload ? JSON.stringify(payload) : undefined,
         credentials: 'include'
       })

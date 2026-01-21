@@ -1,4 +1,4 @@
-import type { AuthStrategy } from '../../types'
+import type { AuthStrategy, ExchangeTokenOptions } from '../../types'
 
 /**
  * Body auth strategy - all auth operations via request body
@@ -55,6 +55,19 @@ export function createBodyStrategy(config: {
       return fetch(config.logoutUrl, {
         method: 'POST',
         headers: baseHeaders,
+        body: payload ? JSON.stringify(payload) : undefined,
+        credentials: 'include'
+      })
+    },
+
+    async exchangeToken(accessToken: string, url: string, options: ExchangeTokenOptions = {}) {
+      const { method = 'POST', payload } = options
+      return fetch(url, {
+        method,
+        headers: {
+          ...baseHeaders,
+          'Authorization': `Bearer ${accessToken}`
+        },
         body: payload ? JSON.stringify(payload) : undefined,
         credentials: 'include'
       })
