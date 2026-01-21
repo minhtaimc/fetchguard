@@ -115,6 +115,61 @@ Hardening tips:
 - Use the domain allow-list aggressively (include explicit ports in development).
 - Avoid logging or exposing tokens in any responses; keep login/refresh parsing inside the worker.
 
+## Multi-Tab Refresh Behavior
+
+When using cookie-based auth with multiple browser tabs, each tab has its own FetchGuard Worker instance but they share the same refresh token cookie. This means concurrent refresh requests are legitimate and expected.
+
+```
+Tab 1: Token expires → calls /refresh
+Tab 2: Token expires → calls /refresh (same cookie)
+Tab 3: Token expires → calls /refresh (same cookie)
+```
+
+**Server Requirements:**
+
+Your auth server MUST handle concurrent refresh requests gracefully. Recommended patterns:
+
+1. **Grace Window (Recommended)**
+   Allow the old refresh token for N seconds after rotation:
+   ```typescript
+   // Server-side example
+   const GRACE_WINDOW_MS = 30_000 // 30 seconds
+
+   async function refreshToken(oldToken: string) {
+     const record = await db.findRefreshToken(oldToken)
+
+     if (record.rotatedAt) {
+       // Token was already rotated
+       const elapsed = Date.now() - record.rotatedAt
+       if (elapsed < GRACE_WINDOW_MS) {
+         // Within grace window: return same new tokens
+         return record.replacementTokens
+       }
+       throw new Error('Refresh token expired')
+     }
+
+     // First use: rotate and mark
+     const newTokens = generateNewTokens()
+     await db.markRotated(oldToken, newTokens, Date.now())
+     return newTokens
+   }
+   ```
+
+2. **Token Family Tracking**
+   Track token lineage and allow previous tokens within grace period.
+
+3. **Idempotency Keys**
+   Accept a unique key per refresh attempt and dedupe server-side.
+
+**FetchGuard Grace Window:**
+
+FetchGuard uses proactive token refresh (default: 60 seconds before expiry via `refreshEarlyMs`). This means:
+- Tokens are refreshed BEFORE they expire, not after
+- Multiple tabs may trigger refresh around the same time
+- Your server grace window should be at least `refreshEarlyMs + network_latency`
+
+Recommendation: Set server grace window to 30-60 seconds to safely handle multi-tab scenarios.
+
 ## Installation
 
 ```bash
@@ -597,6 +652,61 @@ Types:
 - FetchGuardRequestInit extends RequestInit with:
   - requiresAuth?: boolean // default true
   - includeHeaders?: boolean // default false
+  - signal?: AbortSignal // for cancellation
+
+## Helper Functions
+
+FetchGuard exports helper functions for common Result patterns:
+
+```ts
+import {
+  isSuccess,
+  isClientError,
+  isServerError,
+  isNetworkError,
+  parseJson,
+  getErrorMessage,
+  matchResult,
+  ERROR_CODES
+} from 'fetchguard'
+
+const result = await api.get('/users')
+
+// Simple checks
+if (isSuccess(result)) {
+  const users = parseJson<User[]>(result)
+}
+
+// Pattern matching
+const message = matchResult(result, {
+  success: (envelope) => `Got ${parseJson(result)?.length} users`,
+  clientError: (envelope) => `Client error: ${envelope.status}`,
+  serverError: (envelope) => `Server error: ${envelope.status}`,
+  networkError: (errors) => `Network failed: ${errors[0]?.message}`
+})
+
+// Type-safe error code matching
+if (!result.ok && result.errors[0]?.code === ERROR_CODES.NETWORK_ERROR) {
+  console.log('Connection failed')
+}
+```
+
+**Available helpers:**
+- `isSuccess(result)` - Check if 2xx response
+- `isClientError(result)` - Check if 4xx response
+- `isServerError(result)` - Check if 5xx response
+- `isNetworkError(result)` - Check if network error (no response)
+- `parseJson<T>(result)` - Safe JSON parsing with type inference
+- `getErrorMessage(result)` - Extract error message
+- `getErrorBody<T>(result)` - Get typed error body from HTTP errors
+- `getStatus(result)` / `hasStatus(result, code)` - Status code helpers
+- `matchResult(result, handlers)` - Pattern matching
+
+**Error codes** (`ERROR_CODES`):
+- `NETWORK_ERROR`, `REQUEST_CANCELLED`, `REQUEST_TIMEOUT`
+- `HTTP_ERROR`, `RESPONSE_PARSE_FAILED`, `QUEUE_FULL`
+- `LOGIN_FAILED`, `LOGOUT_FAILED`, `TOKEN_REFRESH_FAILED`, `NOT_AUTHENTICATED`
+- `DOMAIN_NOT_ALLOWED`, `INIT_ERROR`, `UNEXPECTED`
 
 ## Message Protocol (pairs, summary)
 
@@ -782,9 +892,22 @@ FormData serialization is tested in [tests/browser/formdata-serialization.test.t
 
 - SSE streaming support
 - Upload progress tracking
-- Request/response interceptors
-- Advanced retries (exponential backoff)
-- Offline queueing
+- Offline queueing (with careful auth handling)
+
+## Claude Code Skill
+
+FetchGuard includes a [Claude Code](https://claude.ai/code) skill for AI-assisted development. To use it:
+
+1. Copy the skill folder to your global Claude settings:
+   ```bash
+   # macOS/Linux
+   cp -r node_modules/fetchguard/skills/fetchguard ~/.claude/skills/
+
+   # Windows
+   xcopy /E /I node_modules\fetchguard\skills\fetchguard %USERPROFILE%\.claude\skills\fetchguard
+   ```
+
+2. Use `/fetchguard` in Claude Code when working with FetchGuard in any project.
 
 ## License
 

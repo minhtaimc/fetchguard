@@ -22,7 +22,8 @@ export type {
   DebugHooks,
   RefreshReason,
   RetryConfig,
-  DedupeConfig
+  DedupeConfig,
+  RequestMetrics
 } from './types'
 
 // Message protocol types (for advanced usage)
@@ -41,6 +42,10 @@ export {
   DomainErrors,
   RequestErrors
 } from './errors'
+
+// Error codes for type-safe error matching
+export { ERROR_CODES } from './error-codes'
+export type { ErrorCode, ErrorCodeKey } from './error-codes'
 
 // Registry utilities
 export { 
@@ -88,3 +93,16 @@ export {
   isBinaryContentType
 } from './utils/binary'
 
+// Helper functions for common Result patterns
+export {
+  isNetworkError,
+  isSuccess,
+  isClientError,
+  isServerError,
+  parseJson,
+  getErrorMessage,
+  getErrorBody,
+  getStatus,
+  hasStatus,
+  matchResult
+} from './helpers'

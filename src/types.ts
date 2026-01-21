@@ -310,6 +310,24 @@ export interface NetworkErrorDetail {
 export type RefreshReason = 'expired' | 'proactive' | 'manual'
 
 /**
+ * Request timing metrics for performance monitoring
+ *
+ * All times are in milliseconds.
+ */
+export interface RequestMetrics {
+  /** When request was initiated (Date.now()) */
+  startTime: number
+  /** When response was received (Date.now()) */
+  endTime: number
+  /** Total duration (endTime - startTime) */
+  duration: number
+  /** Time spent waiting in queue before processing */
+  queueTime: number
+  /** Time spent in IPC (postMessage round-trip overhead) */
+  ipcTime: number
+}
+
+/**
  * Debug hooks for observing FetchGuard operations
  *
  * All hooks are observe-only - they cannot modify requests/responses.
@@ -329,8 +347,9 @@ export interface DebugHooks {
    * Called when response is received from worker
    * @param url - Request URL
    * @param envelope - Response envelope (status, body, headers)
+   * @param metrics - Request timing metrics (optional, for performance monitoring)
    */
-  onResponse?: (url: string, envelope: FetchEnvelope) => void
+  onResponse?: (url: string, envelope: FetchEnvelope, metrics?: RequestMetrics) => void
 
   /**
    * Called when token refresh occurs
@@ -342,8 +361,20 @@ export interface DebugHooks {
    * Called when transport error occurs (network failure, timeout, cancelled)
    * @param url - Request URL
    * @param error - Error detail with code and message
+   * @param metrics - Request timing metrics (optional)
    */
-  onError?: (url: string, error: NetworkErrorDetail) => void
+  onError?: (url: string, error: NetworkErrorDetail, metrics?: RequestMetrics) => void
+
+  /**
+   * Called when worker is ready after initialization
+   */
+  onWorkerReady?: () => void
+
+  /**
+   * Called when worker encounters a fatal error
+   * @param error - Error event from worker
+   */
+  onWorkerError?: (error: ErrorEvent) => void
 }
 
 /**
@@ -375,6 +406,18 @@ export interface RetryConfig {
    * Caps the delay when using exponential backoff
    */
   maxDelay?: number
+
+  /**
+   * Jitter factor to add randomness to retry delays (default: 0 = no jitter)
+   * Range: 0 to 1 (e.g., 0.5 = ±50% randomness)
+   * Helps prevent thundering herd when many clients retry simultaneously.
+   *
+   * Note: Jitter is only applied when shouldRetry returns true.
+   * If request fails permanently, no jitter delay occurs.
+   *
+   * Example: delay=1000, jitter=0.5 => delay between 500ms and 1500ms
+   */
+  jitter?: number
 
   /**
    * Custom condition to determine if error should be retried

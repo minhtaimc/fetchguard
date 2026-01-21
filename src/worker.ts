@@ -31,6 +31,35 @@ import { arrayBufferToBase64, isBinaryContentType } from './utils/binary'
   let currentUser: unknown | undefined
   const pendingControllers = new Map<string, AbortController>()
   let refreshPromise: Promise<Result<string>> | null = null
+  let authPromise: Promise<unknown> | null = null
+
+/**
+ * Mutex wrapper for auth operations (login, logout, custom auth methods)
+ * Prevents race conditions when multiple concurrent auth calls are made.
+ *
+ * Edge case: If authPromise rejects, we catch and ignore it so the next
+ * operation can proceed. Without this, a failed login would block
+ * subsequent login attempts.
+ */
+async function withAuthMutex<T>(operation: () => Promise<T>): Promise<T> {
+  // Wait for any pending auth operation (ignore previous errors)
+  if (authPromise) {
+    try {
+      await authPromise
+    } catch {
+      // Ignore previous auth error - allow new operation to proceed
+    }
+  }
+
+  const promise = operation()
+  authPromise = promise
+
+  try {
+    return await promise
+  } finally {
+    authPromise = null
+  }
+}
 
 /**
  * Ensure we have a valid access token (not expired).
@@ -347,48 +376,51 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
 
     case MSG.AUTH_CALL: {
       const { id, payload } = data
-      try {
-        const { method, args, emitEvent } = payload
-        const shouldEmitEvent = emitEvent ?? true // Default: emit event
+      // Use mutex to prevent concurrent auth operations (login, logout, etc.)
+      await withAuthMutex(async () => {
+        try {
+          const { method, args, emitEvent } = payload
+          const shouldEmitEvent = emitEvent ?? true // Default: emit event
 
-        if (!provider) {
-          sendError(id, err(InitErrors.NotInitialized()))
-          break
+          if (!provider) {
+            sendError(id, err(InitErrors.NotInitialized()))
+            return
+          }
+
+          if (typeof provider[method] !== 'function') {
+            sendError(id, err(GeneralErrors.Unexpected({ message: `Method '${method}' not found on provider` })))
+            return
+          }
+
+          const result = await provider[method](...args)
+          if (!result.ok) {
+            sendError(id, result)
+            return
+          }
+
+          const tokenInfo = result.data
+          if (!tokenInfo) {
+            sendError(id, err(GeneralErrors.Unexpected({ message: 'Provider returned null token info' })))
+            return
+          }
+
+          // Update token state and optionally emit event
+          setTokenState(tokenInfo, shouldEmitEvent)
+
+          // Always send AuthResult back
+          const now = Date.now()
+          const authenticated =
+            accessToken !== null && accessToken !== '' && (expiresAt === null || expiresAt > now)
+
+          sendAuthCallResult(id, {
+            authenticated,
+            expiresAt,
+            user: currentUser
+          })
+        } catch (error) {
+          sendError(id, err(GeneralErrors.Unexpected({ message: error instanceof Error ? error.message : String(error) })))
         }
-
-        if (typeof provider[method] !== 'function') {
-          sendError(id, err(GeneralErrors.Unexpected({ message: `Method '${method}' not found on provider` })))
-          break
-        }
-
-        const result = await provider[method](...args)
-        if (!result.ok) {
-          sendError(id, result)
-          break
-        }
-
-        const tokenInfo = result.data
-        if (!tokenInfo) {
-          sendError(id, err(GeneralErrors.Unexpected({ message: 'Provider returned null token info' })))
-          break
-        }
-
-        // Update token state and optionally emit event
-        setTokenState(tokenInfo, shouldEmitEvent)
-
-        // Always send AuthResult back
-        const now = Date.now()
-        const authenticated =
-          accessToken !== null && accessToken !== '' && (expiresAt === null || expiresAt > now)
-
-        sendAuthCallResult(id, {
-          authenticated,
-          expiresAt,
-          user: currentUser
-        })
-      } catch (error) {
-        sendError(id, err(GeneralErrors.Unexpected({ message: error instanceof Error ? error.message : String(error) })))
-      }
+      })
       break
     }
 

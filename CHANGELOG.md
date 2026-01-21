@@ -98,10 +98,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Optional time-window for recent result sharing
   - Custom `keyGenerator` for advanced deduplication logic
 
-- **Expanded Test Suite** - 100 tests covering all utilities
+- **Expanded Test Suite** - 193 tests covering all utilities
   - FormData serialization tests (12 tests)
   - Binary utilities tests (32 tests)
-  - Total: 100 tests passing
+  - Helper functions tests (50 tests)
+  - Error codes tests (27 tests)
+  - Client features tests (16 tests)
+
+- **AbortSignal Support** - Standard cancellation API
+  - Pass `signal` option to `fetch()` for AbortController-based cancellation
+  - Integrates with existing `cancel(id)` method internally
+  - Returns `REQUEST_CANCELLED` error when aborted
+
+- **Export Error Codes** - Type-safe error matching
+  - New `ERROR_CODES` constant object with all error codes
+  - `ErrorCode` and `ErrorCodeKey` types for type-safe comparisons
+  - Example: `if (error.code === ERROR_CODES.NETWORK_ERROR)`
+
+- **Helper Functions** - Utilities for common Result patterns
+  - `isNetworkError(result)` - Check if result is a network error
+  - `isSuccess(result)` - Check if response is 2xx
+  - `isClientError(result)` - Check if response is 4xx
+  - `isServerError(result)` - Check if response is 5xx
+  - `parseJson<T>(result)` - Safe JSON parsing with type inference
+  - `getErrorMessage(result)` - Extract error message from result
+  - `getErrorBody<T>(result)` - Get typed error body from HTTP errors
+  - `getStatus(result)` - Get HTTP status code or null
+  - `hasStatus(result, status)` - Check for specific status code
+  - `matchResult(result, handlers)` - Pattern matching for result handling
+
+- **Request Timing Metrics** - Performance monitoring
+  - `RequestMetrics` interface with timing breakdown
+  - Metrics passed to `onResponse` and `onError` debug hooks
+  - Fields: `startTime`, `endTime`, `duration`, `queueTime`, `ipcTime`
+
+- **Retry Jitter** - Prevent thundering herd
+  - New `jitter` option in `RetryConfig` (0-1, percentage of delay)
+  - Randomizes retry delay to spread out concurrent retries
+  - Default: `jitter: 0.1` (±10%)
+
+- **Auth Operation Mutex** - Prevent concurrent auth race conditions
+  - Login/logout operations now serialized via mutex
+  - Prevents state corruption from concurrent auth calls
+
+- **Enhanced Debug Hooks**
+  - `onWorkerReady()` - Called when worker initialization completes
+  - `onWorkerError(event)` - Called on worker error events
+  - Metrics now included in `onResponse` and `onError` callbacks
+
+- **Multi-Tab Refresh Documentation** - Server guidance for cookie-based auth
+  - Documentation for handling concurrent refresh from multiple tabs
+  - Grace window pattern recommendation for servers
 
 ### Changed
 

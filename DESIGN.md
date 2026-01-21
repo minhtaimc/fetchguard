@@ -258,6 +258,19 @@ Requires:
 ### 5. Full Axios Compatibility
 FetchGuard is not a drop-in axios replacement. Different API, different philosophy.
 
+### 6. Request Priority Queue
+Considered but rejected. Priority queue adds complexity without proportional benefit:
+
+**Why Not:**
+1. **Priority inversion risk** - High-priority requests requiring auth would wait for refresh token calls queued as normal priority
+2. **Starvation risk** - Low-priority requests may never complete
+3. **Wrong abstraction layer** - FetchGuard is a transport gateway; priority is application-level orchestration
+
+**Workarounds:**
+- Use separate FetchGuard instances for critical vs background requests
+- Implement priority logic in your application's request manager
+- Use `AbortSignal` to cancel low-priority requests when resources are needed
+
 ---
 
 ## Architecture Overview
