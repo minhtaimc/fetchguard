@@ -27,6 +27,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `err()` only accepts 1-2 arguments (error, meta?)
   - Custom metadata now uses `meta.params` instead of custom fields
 
+### Added
+
+- **TransportResult Type Alias** - Semantic type for fetch results
+  - `TransportResult = Result<FetchEnvelope>` with clear documentation
+  - `NetworkErrorDetail` interface for transport error structure
+  - Emphasizes transport vs business result distinction
+
+- **Concurrent Request Queue** - Improved throughput with configurable concurrency
+  - New `maxConcurrent` option (default: 6) in `FetchGuardOptions`
+  - Removed artificial 50ms delay between requests
+  - Uses semaphore pattern for backpressure control
+
+- **IndexedDB Error Callback** - Debug storage failures
+  - New `onError` callback in `IndexedDBStorageOptions`
+  - Storage still fails closed (returns null) for security
+  - New types: `StorageErrorContext`, `StorageErrorCallback`
+
+- **Test Suite** - Added vitest test suite (51 tests)
+  - Domain validation tests (20 tests)
+  - Message protocol tests (10 tests)
+  - Error definitions tests (21 tests)
+
+- **Debug Hooks** - Observe-only hooks for logging and monitoring
+  - `onRequest(url, options)` - Called before each request
+  - `onResponse(url, envelope)` - Called when response received
+  - `onError(url, error)` - Called on transport errors (network, cancelled)
+  - `onRefresh(reason)` - Called when token refresh occurs
+  - New types: `DebugHooks`, `RefreshReason`
+
+- **Transferable Binary** - Zero-copy FormData file transfer
+  - `SerializedFile.buffer: ArrayBuffer` (replaces `data: number[]`)
+  - `postMessage(message, transferables)` for zero-copy transfer
+  - Reduced memory overhead for large file uploads
+
+- **Design Documentation** - New `DESIGN.md` with architectural decisions
+  - Why Web Worker for token isolation
+  - Why IIFE closure for defense in depth
+  - Why transport-only result (not mapping HTTP errors to err)
+  - Security guarantees and trade-offs
+  - Non-goals (SSR, streaming, interceptors)
+
+- **Queue Size Limit** - Prevent memory leak if worker is unresponsive
+  - New `maxQueueSize` option (default: 1000) in `FetchGuardOptions`
+  - Returns `QUEUE_FULL` error when queue is full
+  - New error: `RequestErrors.QueueFull({ size, maxSize })`
+
+- **Configurable Timeouts** - Customize setup and request timeouts
+  - New `setupTimeout` option (default: 10000ms) - worker initialization timeout
+  - New `requestTimeout` option (default: 30000ms) - default request timeout
+
+- **FormData Order Preservation** - Maintain original field order
+  - Single-pass iteration preserves field order during serialization
+  - Fixes potential issues with servers expecting specific field order
+
+- **TOKEN_REFRESHED Event** - Debug hook for token refresh monitoring
+  - Worker emits `TOKEN_REFRESHED` event when token is refreshed
+  - `onRefresh(reason)` hook called with reason: `'expired'` | `'proactive'`
+  - Enables monitoring of token refresh frequency and patterns
+
+- **Retry Logic** - Automatic retry for network errors
+  - New `retry` option in `FetchGuardOptions`
+  - Configurable: `maxAttempts`, `delay`, `backoff`, `maxDelay`
+  - Custom `shouldRetry` function for advanced control
+  - Only retries transport errors (NETWORK_ERROR), not HTTP 4xx/5xx
+
+- **Request Deduplication** - Prevent duplicate concurrent requests
+  - New `dedupe` option in `FetchGuardOptions`
+  - Shares in-flight requests to same URL (GET only by default)
+  - Optional time-window for recent result sharing
+  - Custom `keyGenerator` for advanced deduplication logic
+
+- **Expanded Test Suite** - 100 tests covering all utilities
+  - FormData serialization tests (12 tests)
+  - Binary utilities tests (32 tests)
+  - Total: 100 tests passing
+
 ### Changed
 
 - **FetchEnvelope Structure** - Unchanged, only renamed from `ApiResponse`

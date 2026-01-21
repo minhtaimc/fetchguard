@@ -14,7 +14,15 @@ export type {
   AuthResult,
   SerializedFormData,
   SerializedFile,
-  SerializedFormDataEntry
+  SerializedFormDataEntry,
+  NetworkErrorDetail,
+  TransportResult,
+  StorageErrorContext,
+  StorageErrorCallback,
+  DebugHooks,
+  RefreshReason,
+  RetryConfig,
+  DedupeConfig
 } from './types'
 
 // Message protocol types (for advanced usage)
@@ -50,6 +58,7 @@ export type { ProviderConfig } from './provider/create-provider'
 
 // Storage modules
 export { createIndexedDBStorage } from './provider/storage/indexeddb'
+export type { IndexedDBStorageOptions } from './provider/storage/indexeddb'
 
 // Parser modules
 export { bodyParser } from './provider/parser/body'

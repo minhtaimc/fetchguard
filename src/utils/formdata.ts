@@ -1,55 +1,59 @@
-import type { SerializedFormData, SerializedFormDataEntry, SerializedFile } from '../types'
+import type { SerializedFormData, SerializedFormDataEntry, SerializedFile, SerializedFormDataResult } from '../types'
 
 /**
  * Serialize FormData for transfer over postMessage
- * Inspired by api-worker.js:484-518
  *
- * FormData cannot be cloned via postMessage, so we need to serialize it first
- * Files are converted to ArrayBuffer -> number[] for transfer
+ * FormData cannot be cloned via postMessage, so we need to serialize it first.
+ * Files are converted to ArrayBuffer and returned as transferables for zero-copy transfer.
+ *
+ * IMPORTANT: Preserves original field order by using single-pass iteration.
+ *
+ * @returns SerializedFormDataResult with data and transferables array
  */
-export async function serializeFormData(formData: FormData): Promise<SerializedFormData> {
+export async function serializeFormData(formData: FormData): Promise<SerializedFormDataResult> {
   const entries: Array<[string, SerializedFormDataEntry]> = []
+  const transferables: ArrayBuffer[] = []
 
-  // Use forEach instead of entries() for better TS compatibility
+  // Single-pass iteration to preserve original field order
+  // Collect all entries with their index for order preservation
+  const orderedEntries: Array<{ index: number; key: string; value: FormDataEntryValue }> = []
+  let index = 0
   formData.forEach((value, key) => {
-    // Push async operations to promises array for parallel processing
-    if (value instanceof File) {
-      // We need to handle this synchronously in forEach, so we'll collect promises
-      // and await them all at once
-    } else {
-      entries.push([key, String(value)])
-    }
+    orderedEntries.push({ index, key, value })
+    index++
   })
 
-  // Handle File entries separately with Promise.all
-  const filePromises: Promise<void>[] = []
-  formData.forEach((value, key) => {
-    if (value instanceof File) {
-      const promise = (async () => {
-        const arrayBuffer = await value.arrayBuffer()
-        const uint8Array = new Uint8Array(arrayBuffer)
+  // Process all entries in order, handling files async
+  await Promise.all(
+    orderedEntries.map(async ({ index: idx, key, value }) => {
+      if (value instanceof File) {
+        const buffer = await value.arrayBuffer()
         const serializedFile: SerializedFile = {
           name: value.name,
           type: value.type,
-          data: Array.from(uint8Array) // Convert to number array
+          buffer
         }
-        entries.push([key, serializedFile])
-      })()
-      filePromises.push(promise)
-    }
-  })
-
-  await Promise.all(filePromises)
+        // Store with index for sorting later
+        entries[idx] = [key, serializedFile]
+        transferables.push(buffer)
+      } else {
+        entries[idx] = [key, String(value)]
+      }
+    })
+  )
 
   return {
-    _type: 'FormData',
-    entries
+    data: {
+      _type: 'FormData',
+      entries
+    },
+    transferables
   }
 }
 
 /**
  * Deserialize SerializedFormData back to FormData in worker
- * Reconstructs File objects from serialized data
+ * Reconstructs File objects from transferred ArrayBuffers
  */
 export function deserializeFormData(serialized: SerializedFormData): FormData {
   const formData = new FormData()
@@ -58,9 +62,8 @@ export function deserializeFormData(serialized: SerializedFormData): FormData {
     if (typeof value === 'string') {
       formData.append(key, value)
     } else {
-      // Reconstruct File from SerializedFile
-      const uint8Array = new Uint8Array(value.data)
-      const file = new File([uint8Array], value.name, { type: value.type })
+      // Reconstruct File from SerializedFile (ArrayBuffer already transferred)
+      const file = new File([value.buffer], value.name, { type: value.type })
       formData.append(key, file)
     }
   }

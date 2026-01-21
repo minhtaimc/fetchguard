@@ -23,6 +23,9 @@
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "prepublishOnly": "npm run build",
     "prepack": "npm run build"
   },
@@ -40,8 +43,10 @@
     "ts-micro-result": "^3.3.0"
   },
   "devDependencies": {
+    "happy-dom": "^20.3.4",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=16.0.0"

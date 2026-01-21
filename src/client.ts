@@ -4,7 +4,11 @@ import type {
   WorkerConfig,
   FetchEnvelope,
   ProviderPresetConfig,
-  AuthResult
+  AuthResult,
+  DebugHooks,
+  RetryConfig,
+  NetworkErrorDetail,
+  DedupeConfig
 } from './types'
 import type { MainToWorkerMessage } from './messages'
 import { ok, err, type Result } from 'ts-micro-result'
@@ -19,10 +23,24 @@ import { serializeFormData, isFormData } from './utils/formdata'
 interface QueueItem {
   id: string
   message: MainToWorkerMessage
+  /** Transferable objects for zero-copy postMessage (e.g., ArrayBuffers from FormData) */
+  transferables?: Transferable[]
   resolve: (response: unknown) => void
   reject: (error: Error) => void
   timeout: ReturnType<typeof setTimeout>
 }
+
+/** Default max concurrent requests */
+const DEFAULT_MAX_CONCURRENT = 6
+
+/** Default max queue size */
+const DEFAULT_MAX_QUEUE_SIZE = 1000
+
+/** Default setup timeout (ms) */
+const DEFAULT_SETUP_TIMEOUT = 10000
+
+/** Default request timeout (ms) */
+const DEFAULT_REQUEST_TIMEOUT = 30000
 
 /**
  * FetchGuard Client - main interface cho việc gọi API thông qua Web Worker
@@ -36,17 +54,36 @@ export class FetchGuardClient {
     resolve: (value: unknown) => void
     reject: (error: Error) => void
   }>()
+  /** Track request URLs for debug hooks */
+  private requestUrls = new Map<string, string>()
   private authListeners = new Set<(state: AuthResult) => void>()
   private readyListeners = new Set<() => void>()
   private isReady = false
 
   private requestQueue: QueueItem[] = []
-  private isProcessingQueue = false
-  private queueTimeout = 30000 // 30 seconds
+  private activeRequests = 0
+  private readonly maxConcurrent: number
+  private readonly maxQueueSize: number
+  private readonly setupTimeout: number
+  private readonly requestTimeout: number
   private setupResolve?: () => void
   private setupReject?: (error: Error) => void
+  private readonly debug?: DebugHooks
+  private readonly retry?: RetryConfig
+  private readonly dedupe?: DedupeConfig
+  /** In-flight requests for deduplication */
+  private readonly inFlightRequests = new Map<string, Promise<Result<FetchEnvelope>>>()
+  /** Recent completed requests for time-window deduplication */
+  private readonly recentResults = new Map<string, { result: Result<FetchEnvelope>; timestamp: number }>()
 
   constructor(options: FetchGuardOptions) {
+    this.maxConcurrent = options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT
+    this.maxQueueSize = options.maxQueueSize ?? DEFAULT_MAX_QUEUE_SIZE
+    this.setupTimeout = options.setupTimeout ?? DEFAULT_SETUP_TIMEOUT
+    this.requestTimeout = options.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT
+    this.debug = options.debug
+    this.retry = options.retry
+    this.dedupe = options.dedupe
     this.worker = new Worker(new URL('./worker.js', import.meta.url), { 
       type: 'module' 
     })
@@ -107,7 +144,7 @@ export class FetchGuardClient {
           this.setupResolve = undefined
           this.setupReject = undefined
         }
-      }, 10000)
+      }, this.setupTimeout)
     })
   }
 
@@ -124,7 +161,16 @@ export class FetchGuardClient {
       const request = this.pendingRequests.get(id)
       if (!request) return
 
+      const url = this.requestUrls.get(id)
       this.pendingRequests.delete(id)
+      this.requestUrls.delete(id)
+      this.onRequestComplete()
+
+      // Debug hook: onResponse
+      if (this.debug?.onResponse && url) {
+        this.debug.onResponse(url, payload as FetchEnvelope)
+      }
+
       request.resolve(ok(payload as FetchEnvelope))
       return
     }
@@ -134,10 +180,20 @@ export class FetchGuardClient {
       const request = this.pendingRequests.get(id)
       if (!request) return
 
+      const url = this.requestUrls.get(id)
       this.pendingRequests.delete(id)
+      this.requestUrls.delete(id)
+      this.onRequestComplete()
+
+      const errorMessage = String(payload?.error || 'Network error')
+
+      // Debug hook: onError
+      if (this.debug?.onError && url) {
+        this.debug.onError(url, { code: 'NETWORK_ERROR', message: errorMessage })
+      }
 
       request.resolve(err(
-        RequestErrors.NetworkError({ message: String(payload?.error || 'Network error') })
+        RequestErrors.NetworkError({ message: errorMessage })
       ))
       return
     }
@@ -147,6 +203,7 @@ export class FetchGuardClient {
       if (!request) return
 
       this.pendingRequests.delete(id)
+      this.onRequestComplete()
 
       request.resolve(err(payload.errors, payload.meta))
       return
@@ -182,6 +239,7 @@ export class FetchGuardClient {
       const request = this.pendingRequests.get(id)
       if (request) {
         this.pendingRequests.delete(id)
+        this.onRequestComplete()
         request.resolve(ok({ timestamp: payload?.timestamp }))
       }
       return
@@ -196,8 +254,15 @@ export class FetchGuardClient {
       const request = this.pendingRequests.get(id)
       if (request) {
         this.pendingRequests.delete(id)
+        this.onRequestComplete()
         request.resolve(ok(payload)) // payload is AuthResult
       }
+      return
+    }
+
+    if (type === MSG.TOKEN_REFRESHED) {
+      // Debug hook: onRefresh
+      this.debug?.onRefresh?.(payload?.reason)
       return
     }
   }
@@ -222,11 +287,130 @@ export class FetchGuardClient {
   }
 
   /**
-   * Make API request
+   * Make API request with optional deduplication and retry
    */
   async fetch(url: string, options: FetchGuardRequestInit = {}): Promise<Result<FetchEnvelope>> {
-    const { result } = this.fetchWithId(url, options)
-    return result
+    // Check for deduplication
+    const dedupeKey = this.getDedupeKey(url, options)
+    if (dedupeKey) {
+      // Check for in-flight request
+      const inFlight = this.inFlightRequests.get(dedupeKey)
+      if (inFlight) {
+        return inFlight
+      }
+
+      // Check for recent result within time window
+      const window = this.dedupe?.window ?? 0
+      if (window > 0) {
+        const recent = this.recentResults.get(dedupeKey)
+        if (recent && Date.now() - recent.timestamp < window) {
+          return recent.result
+        }
+      }
+
+      // Create deduped request
+      const promise = this.fetchWithRetry(url, options)
+      this.inFlightRequests.set(dedupeKey, promise)
+
+      try {
+        const result = await promise
+        // Store result for time-window deduplication
+        if (window > 0) {
+          this.recentResults.set(dedupeKey, { result, timestamp: Date.now() })
+          // Clean up old results after window expires
+          setTimeout(() => this.recentResults.delete(dedupeKey), window)
+        }
+        return result
+      } finally {
+        this.inFlightRequests.delete(dedupeKey)
+      }
+    }
+
+    // No deduplication - just fetch with retry
+    return this.fetchWithRetry(url, options)
+  }
+
+  /**
+   * Generate deduplication key for request
+   * Returns null if request should not be deduplicated
+   */
+  private getDedupeKey(url: string, options: FetchGuardRequestInit): string | null {
+    if (!this.dedupe?.enabled) {
+      return null
+    }
+
+    // Use custom key generator if provided
+    if (this.dedupe.keyGenerator) {
+      return this.dedupe.keyGenerator(url, options)
+    }
+
+    // Default: only dedupe GET requests by URL
+    const method = (options.method ?? 'GET').toUpperCase()
+    if (method !== 'GET') {
+      return null
+    }
+
+    return `GET:${url}`
+  }
+
+  /**
+   * Fetch with retry logic (internal)
+   */
+  private async fetchWithRetry(url: string, options: FetchGuardRequestInit): Promise<Result<FetchEnvelope>> {
+    const maxAttempts = this.retry?.maxAttempts ?? 0
+    const delay = this.retry?.delay ?? 1000
+    const backoff = this.retry?.backoff ?? 1
+    const maxDelay = this.retry?.maxDelay ?? 30000
+    const shouldRetry = this.retry?.shouldRetry ?? this.defaultShouldRetry
+
+    let lastResult: Result<FetchEnvelope> | null = null
+    let currentDelay = delay
+
+    // Initial attempt + retries
+    for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+      const { result } = this.fetchWithId(url, options)
+      lastResult = await result
+
+      // Success or HTTP error (4xx/5xx) - don't retry
+      if (lastResult.ok) {
+        return lastResult
+      }
+
+      // Check if we should retry this error
+      const error = lastResult.errors[0]
+      const errorDetail: NetworkErrorDetail = {
+        code: error?.code as NetworkErrorDetail['code'] ?? 'NETWORK_ERROR',
+        message: error?.message ?? 'Unknown error'
+      }
+
+      // Don't retry if:
+      // - This was the last attempt
+      // - Error is not retryable (e.g., cancelled)
+      if (attempt >= maxAttempts || !shouldRetry(errorDetail)) {
+        return lastResult
+      }
+
+      // Wait before retry (with exponential backoff)
+      await this.sleep(Math.min(currentDelay, maxDelay))
+      currentDelay = currentDelay * backoff
+    }
+
+    return lastResult!
+  }
+
+  /**
+   * Default retry condition - only retry on NETWORK_ERROR
+   */
+  private defaultShouldRetry(error: NetworkErrorDetail): boolean {
+    // Don't retry cancelled requests or parse errors
+    return error.code === 'NETWORK_ERROR'
+  }
+
+  /**
+   * Sleep helper for retry delay
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
 
   /**
@@ -247,15 +431,25 @@ export class FetchGuardClient {
         resolve: (response) => resolve(response as Result<FetchEnvelope>),
         reject: (error) => reject(error)
       })
+      // Track URL for debug hooks
+      this.requestUrls.set(id, url)
+
+      // Debug hook: onRequest
+      this.debug?.onRequest?.(url, options)
 
       try {
         let serializedOptions = { ...options }
+        let transferables: Transferable[] | undefined
 
         // Serialize FormData body before sending to worker
         if (options.body && isFormData(options.body)) {
-          const serializedBody = await serializeFormData(options.body)
+          const { data, transferables: formDataTransferables } = await serializeFormData(options.body)
           // SerializedFormData will be deserialized back to FormData in worker
-          serializedOptions.body = serializedBody as unknown as BodyInit
+          serializedOptions.body = data as unknown as BodyInit
+          // ArrayBuffers for zero-copy transfer
+          if (formDataTransferables.length > 0) {
+            transferables = formDataTransferables
+          }
         }
 
         // Serialize Headers object to plain object (Headers cannot be cloned)
@@ -271,11 +465,12 @@ export class FetchGuardClient {
 
         const message = { id, type: MSG.FETCH, payload: { url, options: serializedOptions } }
 
-        await this.sendMessageQueued(message, 30000)
+        await this.sendMessageQueued(message, 30000, transferables)
       } catch (error) {
         const request = this.pendingRequests.get(id)
         if (request) {
           this.pendingRequests.delete(id)
+          this.requestUrls.delete(id)
           request.reject(error instanceof Error ? error : new Error(String(error)))
         }
       }
@@ -292,8 +487,16 @@ export class FetchGuardClient {
   cancel(id: string): void {
     const request = this.pendingRequests.get(id)
     if (request) {
+      const url = this.requestUrls.get(id)
       this.pendingRequests.delete(id)
+      this.requestUrls.delete(id)
       this.worker.postMessage({ id, type: MSG.CANCEL })
+
+      // Debug hook: onError for cancelled request
+      if (this.debug?.onError && url) {
+        this.debug.onError(url, { code: 'REQUEST_CANCELLED', message: 'Request cancelled' })
+      }
+
       request.reject(new Error('Request cancelled'))
     }
   }
@@ -524,9 +727,20 @@ export class FetchGuardClient {
   /**
    * Send message through queue system
    * All messages go through queue for sequential processing
+   * @param transferables - Optional Transferable objects for zero-copy postMessage
    */
-  private sendMessageQueued<T = unknown>(message: MainToWorkerMessage, timeoutMs: number = this.queueTimeout): Promise<T> {
+  private sendMessageQueued<T = unknown>(
+    message: MainToWorkerMessage,
+    timeoutMs: number = this.requestTimeout,
+    transferables?: Transferable[]
+  ): Promise<T> {
     return new Promise((resolve, reject) => {
+      // Check queue size limit to prevent memory leak
+      if (this.requestQueue.length >= this.maxQueueSize) {
+        reject(err(RequestErrors.QueueFull({ size: this.requestQueue.length, maxSize: this.maxQueueSize })))
+        return
+      }
+
       const timeout = setTimeout(() => {
         const index = this.requestQueue.findIndex(item => item.id === message.id)
         if (index !== -1) {
@@ -539,6 +753,7 @@ export class FetchGuardClient {
       const queueItem: QueueItem = {
         id: message.id,
         message,
+        transferables,
         resolve: resolve as (response: unknown) => void,
         reject,
         timeout
@@ -551,34 +766,48 @@ export class FetchGuardClient {
   }
 
   /**
-   * Process message queue sequentially
+   * Process message queue with concurrency limit
+   *
+   * Uses semaphore pattern to allow N concurrent requests.
    * Benefits:
-   * - Sequential processing prevents worker overload
+   * - Higher throughput than sequential processing
+   * - Backpressure via maxConcurrent limit
    * - Better error isolation (one failure doesn't affect others)
-   * - 50ms delay between requests for backpressure
    */
-  private async processQueue(): Promise<void> {
-    if (this.isProcessingQueue || this.requestQueue.length === 0) {
-      return
-    }
-
-    this.isProcessingQueue = true
-
-    while (this.requestQueue.length > 0) {
+  private processQueue(): void {
+    // Process as many items as we can within concurrency limit
+    while (this.requestQueue.length > 0 && this.activeRequests < this.maxConcurrent) {
       const item = this.requestQueue.shift()
       if (!item) continue
 
-      try {
-        this.worker.postMessage(item.message)
+      this.activeRequests++
 
-        await new Promise(resolve => setTimeout(resolve, 50))
+      try {
+        // Use transferables for zero-copy transfer when available (e.g., FormData with files)
+        if (item.transferables && item.transferables.length > 0) {
+          this.worker.postMessage(item.message, item.transferables)
+        } else {
+          this.worker.postMessage(item.message)
+        }
+        // Note: activeRequests is decremented when response is received
+        // in handleWorkerMessage, not here
       } catch (error) {
+        this.activeRequests--
         clearTimeout(item.timeout)
         item.reject(error instanceof Error ? error : new Error(String(error)))
+        // Continue processing queue after error
+        this.processQueue()
       }
     }
+  }
 
-    this.isProcessingQueue = false
+  /**
+   * Called when a request completes (success or error)
+   * Decrements active count and processes next items in queue
+   */
+  private onRequestComplete(): void {
+    this.activeRequests--
+    this.processQueue()
   }
 
   /**
@@ -587,6 +816,7 @@ export class FetchGuardClient {
   destroy(): void {
     this.worker.terminate()
     this.pendingRequests.clear()
+    this.requestUrls.clear()
 
     for (const item of this.requestQueue) {
       clearTimeout(item.timeout)

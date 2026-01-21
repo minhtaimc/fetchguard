@@ -86,6 +86,18 @@ export interface TokenProvider {
 }
 
 /**
+ * Storage error context for debugging
+ */
+export type StorageErrorContext = 'get' | 'set' | 'delete' | 'open'
+
+/**
+ * Storage error callback type
+ * Called when IndexedDB operations fail (quota exceeded, permission denied, etc.)
+ * Storage still fails closed (returns null), but this allows logging/debugging.
+ */
+export type StorageErrorCallback = (error: Error, context: StorageErrorContext) => void
+
+/**
  * Interface for refresh token storage - only stores refresh token
  *
  * Access token is always stored in worker memory.
@@ -162,6 +174,53 @@ export interface FetchGuardOptions {
 
   /** Default headers to include in all requests */
   defaultHeaders?: Record<string, string>
+
+  /**
+   * Maximum concurrent requests to worker (default: 6)
+   * Controls how many requests can be in-flight simultaneously.
+   * Set to 1 for strictly sequential processing.
+   * Higher values increase throughput but may cause worker congestion.
+   */
+  maxConcurrent?: number
+
+  /**
+   * Maximum queue size for pending requests (default: 1000)
+   * When queue is full, new requests will immediately fail with QUEUE_FULL error.
+   * Prevents memory leak if worker is unresponsive.
+   */
+  maxQueueSize?: number
+
+  /**
+   * Worker setup timeout in milliseconds (default: 10000)
+   * How long to wait for worker to be ready before failing.
+   */
+  setupTimeout?: number
+
+  /**
+   * Default request timeout in milliseconds (default: 30000)
+   * How long to wait for a request to complete before timing out.
+   * Can be overridden per-request via fetch options.
+   */
+  requestTimeout?: number
+
+  /**
+   * Debug hooks for observing operations (logging, monitoring)
+   * All hooks are observe-only - they cannot modify requests/responses.
+   */
+  debug?: DebugHooks
+
+  /**
+   * Retry configuration for network errors
+   * Only retries on transport failures, NOT on HTTP errors (4xx/5xx)
+   */
+  retry?: RetryConfig
+
+  /**
+   * Request deduplication configuration
+   * When enabled, duplicate requests to the same URL within a time window
+   * will share the same response instead of making multiple requests.
+   */
+  dedupe?: DedupeConfig
 }
 
 /**
@@ -204,11 +263,13 @@ export interface FetchEnvelope {
 
 /**
  * Serialized file data for transfer over postMessage
+ * Uses ArrayBuffer for zero-copy transfer via Transferable
  */
 export interface SerializedFile {
   name: string
   type: string
-  data: number[] // ArrayBuffer as number array
+  /** ArrayBuffer - transferred via postMessage Transferable for zero-copy */
+  buffer: ArrayBuffer
 }
 
 /**
@@ -223,3 +284,161 @@ export interface SerializedFormData {
   _type: 'FormData'
   entries: Array<[string, SerializedFormDataEntry]>
 }
+
+/**
+ * Result of FormData serialization with transferables
+ * Used for zero-copy transfer via postMessage
+ */
+export interface SerializedFormDataResult {
+  data: SerializedFormData
+  /** ArrayBuffers to transfer - pass to postMessage as second argument */
+  transferables: ArrayBuffer[]
+}
+
+/**
+ * Network error detail for transport failures
+ * Used when no HTTP response is received (connection failed, timeout, cancelled)
+ */
+export interface NetworkErrorDetail {
+  code: 'NETWORK_ERROR' | 'REQUEST_CANCELLED' | 'RESPONSE_PARSE_FAILED'
+  message: string
+}
+
+/**
+ * Reason for token refresh
+ */
+export type RefreshReason = 'expired' | 'proactive' | 'manual'
+
+/**
+ * Debug hooks for observing FetchGuard operations
+ *
+ * All hooks are observe-only - they cannot modify requests/responses.
+ * Useful for logging, debugging, and monitoring.
+ *
+ * Note: Hooks run synchronously and should not perform heavy operations.
+ */
+export interface DebugHooks {
+  /**
+   * Called before each request is sent to worker
+   * @param url - Request URL
+   * @param options - Request options (method, headers, etc.)
+   */
+  onRequest?: (url: string, options: FetchGuardRequestInit) => void
+
+  /**
+   * Called when response is received from worker
+   * @param url - Request URL
+   * @param envelope - Response envelope (status, body, headers)
+   */
+  onResponse?: (url: string, envelope: FetchEnvelope) => void
+
+  /**
+   * Called when token refresh occurs
+   * @param reason - Why refresh happened: 'expired', 'proactive', or 'manual'
+   */
+  onRefresh?: (reason: RefreshReason) => void
+
+  /**
+   * Called when transport error occurs (network failure, timeout, cancelled)
+   * @param url - Request URL
+   * @param error - Error detail with code and message
+   */
+  onError?: (url: string, error: NetworkErrorDetail) => void
+}
+
+/**
+ * Retry configuration for network errors
+ *
+ * Only retries on transport failures (network error, timeout).
+ * Does NOT retry on HTTP errors (4xx/5xx) - those are valid responses.
+ * Does NOT retry cancelled requests.
+ */
+export interface RetryConfig {
+  /**
+   * Maximum number of retry attempts (default: 0 = no retry)
+   */
+  maxAttempts?: number
+
+  /**
+   * Delay between retries in milliseconds (default: 1000)
+   */
+  delay?: number
+
+  /**
+   * Exponential backoff multiplier (default: 1 = no backoff)
+   * Example: delay=1000, backoff=2 => 1s, 2s, 4s, 8s...
+   */
+  backoff?: number
+
+  /**
+   * Maximum delay in milliseconds (default: 30000)
+   * Caps the delay when using exponential backoff
+   */
+  maxDelay?: number
+
+  /**
+   * Custom condition to determine if error should be retried
+   * Default: retry on NETWORK_ERROR only
+   * @param error - The error that occurred
+   * @returns true to retry, false to fail immediately
+   */
+  shouldRetry?: (error: NetworkErrorDetail) => boolean
+}
+
+/**
+ * Request deduplication configuration
+ *
+ * When enabled, identical GET requests (same URL) within a time window
+ * will share the same in-flight request instead of making duplicates.
+ *
+ * IMPORTANT:
+ * - Only applies to GET requests (POST/PUT/DELETE are never deduplicated)
+ * - Only deduplicates in-flight requests (not caching)
+ * - Safe for most read operations
+ */
+export interface DedupeConfig {
+  /**
+   * Enable deduplication (default: false)
+   */
+  enabled?: boolean
+
+  /**
+   * Time window in milliseconds to consider requests as duplicates (default: 0)
+   * 0 = only dedupe concurrent/in-flight requests
+   * >0 = also dedupe requests within this time window after completion
+   */
+  window?: number
+
+  /**
+   * Custom key generator for deduplication
+   * Default: uses URL only for GET requests
+   * @param url - Request URL
+   * @param options - Request options
+   * @returns Key string, or null to skip deduplication for this request
+   */
+  keyGenerator?: (url: string, options: FetchGuardRequestInit) => string | null
+}
+
+/**
+ * Transport result - represents the outcome of a network request
+ *
+ * IMPORTANT: This is a TRANSPORT result, not a business result.
+ * - ok = HTTP response received (check envelope.status for 2xx/4xx/5xx)
+ * - err = Network failure (no response received)
+ *
+ * Example:
+ * ```typescript
+ * const result = await api.get('/users')
+ * if (result.ok) {
+ *   // Transport succeeded - got HTTP response
+ *   if (result.data.status >= 200 && result.data.status < 400) {
+ *     // Business success
+ *   } else {
+ *     // Business error (4xx/5xx) - still has response body
+ *   }
+ * } else {
+ *   // Transport failed - no response (network error, timeout, cancelled)
+ * }
+ * ```
+ */
+export type TransportResult = Result<FetchEnvelope>

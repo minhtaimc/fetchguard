@@ -12,7 +12,7 @@ import {
   RequestErrors,
   GeneralErrors
 } from './errors'
-import { sendAuthStateChanged, sendAuthCallResult, sendPong, sendReady, sendSetupError, sendError, sendFetchResult, sendFetchError } from './worker-post'
+import { sendAuthStateChanged, sendAuthCallResult, sendPong, sendReady, sendSetupError, sendError, sendFetchResult, sendFetchError, sendTokenRefreshed } from './worker-post'
 import { getProvider } from './utils/registry'
 import { buildProviderFromPreset } from './provider/register-presets'
 import { deserializeFormData, isSerializedFormData } from './utils/formdata'
@@ -45,12 +45,15 @@ async function ensureValidToken(): Promise<Result<string>> {
     return err(InitErrors.NotInitialized())
   }
 
-  if (accessToken && expiresAt) {
-    const refreshEarlyMs = config?.refreshEarlyMs ?? DEFAULT_REFRESH_EARLY_MS
-    const timeLeft = expiresAt - Date.now()
-    if (timeLeft > refreshEarlyMs) {
-      return ok(accessToken)
-    }
+  // Determine refresh reason before checking if refresh is needed
+  const refreshEarlyMs = config?.refreshEarlyMs ?? DEFAULT_REFRESH_EARLY_MS
+  const now = Date.now()
+  const timeLeft = expiresAt ? expiresAt - now : 0
+  const isExpired = !accessToken || !expiresAt || timeLeft <= 0
+  const isProactive = !isExpired && timeLeft <= refreshEarlyMs
+
+  if (accessToken && expiresAt && timeLeft > refreshEarlyMs) {
+    return ok(accessToken)
   }
 
   if (refreshPromise) {
@@ -83,6 +86,9 @@ async function ensureValidToken(): Promise<Result<string>> {
       if (!accessToken) {
         return err(AuthErrors.TokenRefreshFailed({ message: 'Access token is null after refresh' }))
       }
+
+      // Emit TOKEN_REFRESHED event for debug hooks
+      sendTokenRefreshed(isProactive ? 'proactive' : 'expired')
 
       return ok(accessToken)
     } finally {

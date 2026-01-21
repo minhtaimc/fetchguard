@@ -1,5 +1,5 @@
 import type { ErrorDetail, Result, ResultMeta } from 'ts-micro-result'
-import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig, AuthResult, FetchEnvelope } from './types'
+import type { WorkerConfig, FetchGuardRequestInit, ProviderPresetConfig, AuthResult, FetchEnvelope, RefreshReason } from './types'
 
 /**
  * MESSAGE PAYLOADS - SINGLE SOURCE OF TRUTH
@@ -45,6 +45,7 @@ export interface WorkerPayloads {
   AUTH_CALL_RESULT: AuthResult
   FETCH_RESULT: FetchEnvelope
   FETCH_ERROR: { error: string; status?: number }
+  TOKEN_REFRESHED: { reason: RefreshReason }
 }
 
 /**
@@ -91,5 +92,6 @@ export const MSG = Object.freeze({
   AUTH_STATE_CHANGED: 'AUTH_STATE_CHANGED',
   AUTH_CALL_RESULT: 'AUTH_CALL_RESULT',
   FETCH_RESULT: 'FETCH_RESULT',
-  FETCH_ERROR: 'FETCH_ERROR'
+  FETCH_ERROR: 'FETCH_ERROR',
+  TOKEN_REFRESHED: 'TOKEN_REFRESHED'
 }) as { readonly [K in MessageType]: K }

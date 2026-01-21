@@ -5,7 +5,7 @@
 
 import type { WorkerToMainMessage } from './messages'
 import type { Result } from 'ts-micro-result'
-import type { AuthResult, FetchEnvelope } from './types'
+import type { AuthResult, FetchEnvelope, RefreshReason } from './types'
 import { MSG } from './messages'
 
 /**
@@ -102,5 +102,16 @@ export function sendAuthCallResult(id: string, authResult: AuthResult): void {
     type: MSG.AUTH_CALL_RESULT,
     id,
     payload: authResult
+  } as any)
+}
+
+/**
+ * Send TOKEN_REFRESHED event (for debug hooks)
+ */
+export function sendTokenRefreshed(reason: RefreshReason): void {
+  post({
+    type: MSG.TOKEN_REFRESHED,
+    id: `evt_${Date.now()}`,
+    payload: { reason }
   } as any)
 }

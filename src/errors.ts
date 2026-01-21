@@ -53,4 +53,7 @@ export const RequestErrors = {
 
   // Response parsing errors
   ResponseParseFailed: defineError('RESPONSE_PARSE_FAILED', 'Failed to parse response body'),
+
+  // Queue errors
+  QueueFull: defineErrorAdvanced('QUEUE_FULL', 'Request queue full ({size}/{maxSize})'),
 } as const
