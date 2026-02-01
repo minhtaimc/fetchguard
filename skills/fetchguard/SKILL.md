@@ -1,9 +1,9 @@
 ---
 name: fetchguard
-description: FetchGuard v2.1.2 usage guide. Use when implementing secure API calls with Web Worker token isolation, handling auth flows (login/logout/refresh/exchange), or working with Result-based responses.
+description: FetchGuard v2.2.1 usage guide. Use when implementing secure API calls with Web Worker token isolation, handling auth flows (login/logout/refresh/exchange), or working with Result-based responses.
 ---
 
-# FetchGuard v2.1.2
+# FetchGuard v2.2.1
 
 Secure API proxy that isolates tokens in Web Worker IIFE closure. Protects against XSS token theft.
 
