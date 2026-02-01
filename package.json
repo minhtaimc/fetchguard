@@ -1,6 +1,6 @@
 {
   "name": "fetchguard",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "A secure fetch API library that runs in Web Workers with automatic token management",
   "type": "module",
   "main": "dist/index.js",
@@ -17,7 +17,10 @@
   "files": [
     "dist"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/worker.js",
+    "./src/worker.ts"
+  ],
   "scripts": {
     "build": "tsup && npm run typecheck",
     "dev": "tsup --watch",
