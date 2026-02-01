@@ -1,9 +1,9 @@
 ---
 name: fetchguard
-description: FetchGuard v2.2.2 usage guide. Use when implementing secure API calls with Web Worker token isolation, handling auth flows (login/logout/refresh/exchange), or working with Result-based responses.
+description: FetchGuard v2.2.3 usage guide. Use when implementing secure API calls with Web Worker token isolation, handling auth flows (login/logout/refresh/exchange), or working with Result-based responses.
 ---
 
-# FetchGuard v2.2.2
+# FetchGuard v2.2.3
 
 Secure API proxy that isolates tokens in Web Worker IIFE closure. Protects against XSS token theft.
 
@@ -17,9 +17,16 @@ npm install fetchguard ts-micro-result
 ```ts
 // vite.config.ts
 export default defineConfig({
-  optimizeDeps: { exclude: ['fetchguard'] }
+  optimizeDeps: {
+    exclude: ['fetchguard']  // Required: Don't pre-bundle
+  },
+  worker: {
+    format: 'es'  // Required: ES modules for workers
+  }
 })
 ```
+
+> Without BOTH config options, you'll get "Worker setup timeout" errors.
 
 ## Quick Start
 
@@ -480,16 +487,20 @@ registerProvider('my-auth', myProvider)
 ```ts
 // api-service.ts
 import { createClient } from 'fetchguard'
-import MyWorker from './my-worker?worker'  // Vite worker import
 
 const api = createClient({
   provider: 'my-auth',  // Reference registered provider by name
-  workerFactory: () => new MyWorker(),  // Pass custom worker factory
+  workerFactory: () => new Worker(
+    new URL('./my-worker.ts', import.meta.url),
+    { type: 'module' }
+  ),
   allowedDomains: ['api.example.com']
 })
 
 await api.whenReady()
 ```
+
+> **Note:** With Vite, use `new URL('./my-worker.ts', import.meta.url)` pattern instead of `?worker` suffix for better compatibility.
 
 ### Custom Strategy (Full Control)
 

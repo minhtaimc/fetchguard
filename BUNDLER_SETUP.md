@@ -22,22 +22,25 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   optimizeDeps: {
-    exclude: ['fetchguard']  // Don't pre-bundle (uses workers)
+    exclude: ['fetchguard']  // Required: Don't pre-bundle (uses workers)
   },
-
   worker: {
-    format: 'es' // Use ES modules for workers (optional)
+    format: 'es'  // Required: Use ES modules for workers
   }
 })
 ```
 
 ### Why This Config?
 
-**`exclude: ['fetchguard']`**
-- Prevents Vite from pre-bundling the library
-- Web Workers need special handling during dev
-- Avoids bundling conflicts
+**`optimizeDeps.exclude: ['fetchguard']`** (Required)
+- Prevents Vite from pre-bundling the library during development
+- FetchGuard uses Web Workers which need special handling
+- Without this, you'll get "Worker setup timeout" errors
 
+**`worker.format: 'es'`** (Required)
+- Ensures workers use ES modules format
+- Required for proper import resolution inside the worker
+- Without this, worker imports may fail silently
 
 ### Example: React + Vite
 
@@ -50,6 +53,9 @@ export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
     exclude: ['fetchguard']
+  },
+  worker: {
+    format: 'es'
   }
 })
 ```
@@ -298,11 +304,21 @@ esbuild.build({
 
 ## Common Issues & Solutions
 
-### Issue 1: "Worker script failed to load"
+### Issue 1: "Worker setup timeout" or "Worker script failed to load"
 
-**Cause**: Bundler is trying to bundle the worker script incorrectly.
+**Cause**: Vite is pre-bundling fetchguard or worker format is incorrect.
 
-**Solution**: Add `exclude: ['fetchguard']` to your bundler config (see above).
+**Solution**: Add BOTH config options to `vite.config.ts`:
+```typescript
+export default defineConfig({
+  optimizeDeps: {
+    exclude: ['fetchguard']  // Required
+  },
+  worker: {
+    format: 'es'  // Required
+  }
+})
+```
 
 ---
 
@@ -407,7 +423,7 @@ npm run dev
 
 | Bundler | Config Required? | Complexity | Notes |
 |---------|-----------------|------------|-------|
-| **Vite** | ✅ Yes (2 lines) | ⭐ Easy | Add to optimizeDeps |
+| **Vite** | ✅ Yes (4 lines) | ⭐ Easy | optimizeDeps + worker.format |
 | **Create React App** | ❌ No | ⭐ Easy | Works out of the box |
 | **Next.js** | ✅ Yes | ⭐⭐ Medium | webpack config + client-only |
 | **Webpack** | ✅ Yes | ⭐⭐⭐ Hard | Need worker-loader |

@@ -46,8 +46,9 @@ export interface ProviderConfig {
  */
 export function createProvider(config: ProviderConfig): TokenProvider {
   const baseProvider: Pick<TokenProvider, 'refreshToken' | 'login' | 'logout' | 'exchangeToken'> = {
-    async refreshToken(refreshToken: string | null) {
-      let currentRefreshToken = refreshToken
+    async refreshToken(refreshToken?: string | null) {
+      // Load from storage if no token provided (null or undefined)
+      let currentRefreshToken = refreshToken ?? null
       if (currentRefreshToken === null && config.refreshStorage) {
         currentRefreshToken = await config.refreshStorage.get()
       }

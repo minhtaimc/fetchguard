@@ -1,6 +1,6 @@
 {
   "name": "fetchguard",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "A secure fetch API library that runs in Web Workers with automatic token management",
   "type": "module",
   "main": "dist/index.js",

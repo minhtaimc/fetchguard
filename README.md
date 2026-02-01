@@ -185,12 +185,15 @@ If using **Vite**, add this to your `vite.config.ts`:
 ```typescript
 export default defineConfig({
   optimizeDeps: {
-    exclude: ['fetchguard']  // Required for Web Workers
+    exclude: ['fetchguard']  // Required: Don't pre-bundle
+  },
+  worker: {
+    format: 'es'  // Required: ES modules for workers
   }
 })
 ```
 
-> **Why?** FetchGuard uses Web Workers which need special handling in Vite.
+> **Why?** FetchGuard uses Web Workers which need special handling in Vite. Without BOTH config options, you'll get "Worker setup timeout" errors.
 > See [BUNDLER_SETUP.md](./BUNDLER_SETUP.md) for setup guides for all bundlers (Vite, Webpack, Next.js, etc.)
 
 ## Quick Start
@@ -598,6 +601,8 @@ const api = createClient({
   allowedDomains: ['api.example.com']
 })
 ```
+
+> **Note:** With Vite, use `new URL('./my-worker.ts', import.meta.url)` pattern for worker files. Don't forget the Vite config above!
 
 **Why workerFactory?**
 
