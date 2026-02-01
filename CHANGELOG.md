@@ -15,12 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enables workarounds for Worker limitations (no localStorage, custom storage)
   - Full control over worker initialization and provider registration
 
+- **Worker Exports** - Provider utilities now exported from `fetchguard/worker`
+  - `registerProvider`, `createProvider`, `createBodyStrategy`, `createCookieStrategy`
+  - `createIndexedDBStorage`, `bodyParser`, `cookieParser`
+  - **IMPORTANT:** Custom worker files MUST import from `'fetchguard/worker'` (not `'fetchguard'`) to use the same registry instance
+
 ### Example
 
 ```typescript
 // my-worker.ts - Custom worker with registered provider
-import { registerProvider, createProvider } from 'fetchguard'
-import { createIndexedDBStorage } from 'fetchguard'
+// IMPORTANT: Import from 'fetchguard/worker' to ensure same registry!
+import {
+  registerProvider,
+  createProvider,
+  createIndexedDBStorage
+} from 'fetchguard/worker'
 
 // Register custom provider inside worker
 registerProvider('my-custom-auth', createProvider({
@@ -38,9 +47,6 @@ registerProvider('my-custom-auth', createProvider({
   },
   strategy: { /* ... */ }
 }))
-
-// Re-export worker entry point
-export * from 'fetchguard/worker'
 ```
 
 ```typescript

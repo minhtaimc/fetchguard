@@ -13,8 +13,21 @@ import {
   GeneralErrors
 } from './errors'
 import { sendAuthStateChanged, sendAuthCallResult, sendPong, sendReady, sendSetupError, sendError, sendFetchResult, sendFetchError, sendTokenRefreshed } from './worker-post'
-import { getProvider } from './utils/registry'
+import { getProvider, registerProvider, unregisterProvider, hasProvider, listProviders, clearProviders } from './utils/registry'
 import { buildProviderFromPreset } from './provider/register-presets'
+
+// Re-export registry functions for custom workers
+// This ensures custom workers use the SAME registry instance as the worker IIFE
+export { registerProvider, unregisterProvider, hasProvider, listProviders, clearProviders }
+
+// Re-export provider utilities for custom workers
+export { createProvider } from './provider/create-provider'
+export { createBodyStrategy } from './provider/strategy/body'
+export { createCookieStrategy } from './provider/strategy/cookie'
+export { createIndexedDBStorage } from './provider/storage/indexeddb'
+export { bodyParser } from './provider/parser/body'
+export { cookieParser } from './provider/parser/cookie'
+export type { TokenProvider, TokenParser, AuthStrategy, RefreshTokenStorage, ExchangeTokenOptions } from './types'
 import { deserializeFormData, isSerializedFormData } from './utils/formdata'
 import { arrayBufferToBase64, isBinaryContentType } from './utils/binary'
 

@@ -524,8 +524,12 @@ For complex auth flows with custom parsers or strategies, use `workerFactory` to
 
 ```ts
 // my-worker.ts
-import { registerProvider, createProvider } from 'fetchguard'
-import { createIndexedDBStorage } from 'fetchguard'
+// IMPORTANT: Import from 'fetchguard/worker' to ensure same registry instance!
+import {
+  registerProvider,
+  createProvider,
+  createIndexedDBStorage
+} from 'fetchguard/worker'
 
 // Register custom provider INSIDE the worker
 registerProvider('my-custom-auth', createProvider({
@@ -577,9 +581,6 @@ registerProvider('my-custom-auth', createProvider({
     }
   }
 }))
-
-// Re-export worker entry point (required!)
-export * from 'fetchguard/worker'
 ```
 
 **Step 2: Use workerFactory in main thread**

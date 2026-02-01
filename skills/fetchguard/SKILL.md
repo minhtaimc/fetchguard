@@ -417,13 +417,14 @@ Use custom provider when your API format differs from default:
 
 ```ts
 // my-worker.ts
-import 'fetchguard/worker'  // Import base worker first!
+// IMPORTANT: Import ALL provider utilities from 'fetchguard/worker' to ensure
+// the same registry instance is used. DO NOT import from 'fetchguard' in worker files!
 import {
   registerProvider,
   createProvider,
   createBodyStrategy,
   createIndexedDBStorage
-} from 'fetchguard'
+} from 'fetchguard/worker'
 
 // Custom parser for your API format
 // Example: API returns { ok: true, data: { accessToken, ... } }
@@ -496,9 +497,13 @@ For complete control over auth API calls:
 
 ```ts
 // my-worker.ts
-import 'fetchguard/worker'
-import { registerProvider, createProvider, createIndexedDBStorage } from 'fetchguard'
-import type { ExchangeTokenOptions } from 'fetchguard'
+// IMPORTANT: Import from 'fetchguard/worker' in worker files!
+import {
+  registerProvider,
+  createProvider,
+  createIndexedDBStorage,
+  type ExchangeTokenOptions
+} from 'fetchguard/worker'
 
 const myParser = { /* ... as above ... */ }
 
