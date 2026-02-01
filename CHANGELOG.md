@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-02-01
+
+### Added
+
+- **Worker Factory** - Custom worker support for advanced use cases
+  - New `workerFactory` option in `FetchGuardOptions`
+  - Allows custom workers with registered providers (custom parsers, strategies)
+  - Enables workarounds for Worker limitations (no localStorage, custom storage)
+  - Full control over worker initialization and provider registration
+
+### Example
+
+```typescript
+// my-worker.ts - Custom worker with registered provider
+import { registerProvider, createProvider } from 'fetchguard'
+import { createIndexedDBStorage } from 'fetchguard'
+
+// Register custom provider inside worker
+registerProvider('my-custom-auth', createProvider({
+  refreshStorage: createIndexedDBStorage('MyApp', 'refreshToken'),
+  parser: {
+    async parse(response: Response) {
+      const data = await response.json()
+      return {
+        token: data.result.accessToken,  // Custom response format
+        refreshToken: data.result.refreshToken,
+        expiresAt: data.result.exp * 1000,
+        user: data.result.profile
+      }
+    }
+  },
+  strategy: { /* ... */ }
+}))
+
+// Re-export worker entry point
+export * from 'fetchguard/worker'
+```
+
+```typescript
+// main.ts - Use custom worker
+import { createClient } from 'fetchguard'
+
+const api = createClient({
+  provider: 'my-custom-auth',
+  workerFactory: () => new Worker(
+    new URL('./my-worker.ts', import.meta.url),
+    { type: 'module' }
+  )
+})
+```
+
 ## [2.1.2] - 2026-01-21
 
 ### Added

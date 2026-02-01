@@ -401,42 +401,229 @@ api.destroy()
 
 ## Custom Provider (Advanced)
 
-```ts
-import { createProvider, createIndexedDBStorage, bodyParser, registerProvider } from 'fetchguard'
+### When to Use Custom Provider
 
-const myProvider = createProvider({
-  refreshStorage: createIndexedDBStorage('MyApp', 'refreshToken'),
-  parser: bodyParser,
-  strategy: {
-    async refresh(refreshToken) {
-      return fetch('/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken })
-      })
-    },
-    async login(payload, url) {
-      return fetch(url || '/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-    },
-    async logout(payload) {
-      return fetch('/auth/logout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload || {})
-      })
+Use custom provider when your API format differs from default:
+- Default: `{ data: { accessToken, refreshToken, expiresAt, user } }`
+- Your API: `{ ok: true, data: { ... } }` or other formats
+
+**IMPORTANT:** Custom providers with functions (parser, strategy) cannot be passed directly to `createClient()` because functions can't be serialized via `postMessage` to Worker. You must:
+
+1. Create a custom worker file
+2. Register the provider inside the worker
+3. Pass the worker via `workerFactory` option
+
+### Step 1: Create Custom Worker File
+
+```ts
+// my-worker.ts
+import 'fetchguard/worker'  // Import base worker first!
+import {
+  registerProvider,
+  createProvider,
+  createBodyStrategy,
+  createIndexedDBStorage
+} from 'fetchguard'
+
+// Custom parser for your API format
+// Example: API returns { ok: true, data: { accessToken, ... } }
+const myParser = {
+  async parse(response: Response) {
+    const json = await response.json()
+
+    // Handle your API format
+    if (json.ok && json.data) {
+      const { accessToken, refreshToken, expiresAt, id, name, role } = json.data
+
+      // Decode JWT to get expiresAt if not in response
+      let expiry = expiresAt
+      if (!expiry && accessToken) {
+        try {
+          const payload = JSON.parse(atob(accessToken.split('.')[1]))
+          expiry = payload.exp ? payload.exp * 1000 : undefined
+        } catch {
+          expiry = Date.now() + 15 * 60 * 1000  // Fallback: 15 min
+        }
+      }
+
+      return {
+        token: accessToken,
+        refreshToken,
+        expiresAt: expiry,
+        user: id ? { id, name, role } : undefined
+      }
     }
+
+    // Auth failed
+    return { token: undefined }
   }
+}
+
+// Create provider with custom parser
+const myProvider = createProvider({
+  refreshStorage: createIndexedDBStorage('my-app'),
+  parser: myParser,
+  strategy: createBodyStrategy({
+    refreshUrl: 'https://api.example.com/auth/refresh',
+    loginUrl: 'https://api.example.com/auth/login',
+    logoutUrl: 'https://api.example.com/auth/logout'
+  })
 })
 
-// Register for reuse
+// Register provider - this runs INSIDE the worker
 registerProvider('my-auth', myProvider)
+```
 
-// Use registered provider
-const api = createClient({ provider: 'my-auth' })
+### Step 2: Use Custom Worker in Client
+
+```ts
+// api-service.ts
+import { createClient } from 'fetchguard'
+import MyWorker from './my-worker?worker'  // Vite worker import
+
+const api = createClient({
+  provider: 'my-auth',  // Reference registered provider by name
+  workerFactory: () => new MyWorker(),  // Pass custom worker factory
+  allowedDomains: ['api.example.com']
+})
+
+await api.whenReady()
+```
+
+### Custom Strategy (Full Control)
+
+For complete control over auth API calls:
+
+```ts
+// my-worker.ts
+import 'fetchguard/worker'
+import { registerProvider, createProvider, createIndexedDBStorage } from 'fetchguard'
+import type { ExchangeTokenOptions } from 'fetchguard'
+
+const myParser = { /* ... as above ... */ }
+
+// Custom strategy with full control
+const myStrategy = {
+  async refresh(refreshToken: string | null) {
+    return fetch('https://api.example.com/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+      credentials: 'include'
+    })
+  },
+
+  async login(payload: unknown, url?: string) {
+    return fetch(url || 'https://api.example.com/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      credentials: 'include'
+    })
+  },
+
+  async logout(payload?: unknown) {
+    return fetch('https://api.example.com/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload ? JSON.stringify(payload) : undefined,
+      credentials: 'include'
+    })
+  },
+
+  async exchangeToken(accessToken: string, url: string, options: ExchangeTokenOptions = {}) {
+    const { method = 'POST', payload, headers } = options
+    return fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: payload ? JSON.stringify(payload) : undefined,
+      credentials: 'include'
+    })
+  }
+}
+
+const myProvider = createProvider({
+  refreshStorage: createIndexedDBStorage('my-app'),
+  parser: myParser,
+  strategy: myStrategy
+})
+
+registerProvider('my-auth', myProvider)
+```
+
+### Default Parser Format
+
+The built-in `bodyParser` expects this format:
+
+```ts
+// Expected API response format
+{
+  data: {
+    accessToken: "eyJ...",
+    refreshToken: "abc123",
+    expiresAt: 1767860146000,  // or seconds, or ISO string
+    user: { id: 1, name: "John" }
+  }
+}
+```
+
+### expiresAt Normalization
+
+The built-in parser automatically normalizes `expiresAt` to milliseconds:
+
+```ts
+{ expiresAt: 1767860146000 }              // milliseconds - used as-is
+{ expiresAt: 1767860146 }                 // seconds - converted to ms
+{ expiresAt: "2026-01-08T08:15:46.000Z" } // ISO string - parsed to ms
+```
+
+### Worker Limitations
+
+**Important:** Web Workers don't have access to:
+- `localStorage` - Use IndexedDB instead (via `createIndexedDBStorage`)
+- `document` / `window` - Worker runs in isolated context
+- DOM APIs
+
+If you need to store extra data (like deviceId), include it in the `user` object:
+
+```ts
+// In parser (worker)
+return { token: accessToken, user: { id, name, deviceId } }
+
+// In main thread
+api.onAuthStateChanged(({ user }) => {
+  if (user?.deviceId) {
+    localStorage.setItem('deviceId', user.deviceId)
+  }
+})
+```
+
+### Using Built-in Strategy Factories
+
+For simpler cases with custom parser only:
+
+```ts
+import { createBodyStrategy, createCookieStrategy } from 'fetchguard'
+
+// Body-based auth
+const bodyStrategy = createBodyStrategy({
+  refreshUrl: 'https://api.example.com/auth/refresh',
+  loginUrl: 'https://api.example.com/auth/login',
+  logoutUrl: 'https://api.example.com/auth/logout',
+  headers: { 'X-Client': 'web' },
+  defaultHeaders: { 'X-Version': '1.0' }
+})
+
+// Cookie-based auth
+const cookieStrategy = createCookieStrategy({
+  refreshUrl: 'https://api.example.com/auth/refresh',
+  loginUrl: 'https://api.example.com/auth/login',
+  logoutUrl: 'https://api.example.com/auth/logout'
+})
 ```
 
 ## Custom Auth Methods

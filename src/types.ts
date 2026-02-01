@@ -261,6 +261,31 @@ export interface FetchGuardOptions {
    * will share the same response instead of making multiple requests.
    */
   dedupe?: DedupeConfig
+
+  /**
+   * Custom worker factory function
+   *
+   * Use this when you need a custom provider with parser/strategy functions.
+   * Create a custom worker file that imports 'fetchguard/worker' and registers
+   * your provider, then pass a factory function that creates that worker.
+   *
+   * @example
+   * ```ts
+   * // my-worker.ts
+   * import 'fetchguard/worker'
+   * import { registerProvider, createProvider, ... } from 'fetchguard'
+   * const myProvider = createProvider({ parser: myParser, strategy: myStrategy, ... })
+   * registerProvider('my-auth', myProvider)
+   *
+   * // main.ts
+   * import MyWorker from './my-worker?worker'
+   * const api = createClient({
+   *   provider: 'my-auth',
+   *   workerFactory: () => new MyWorker()
+   * })
+   * ```
+   */
+  workerFactory?: () => Worker
 }
 
 /**

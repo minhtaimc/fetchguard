@@ -516,66 +516,94 @@ await api.login(...)          // has X-Client-Version, X-Platform, Accept-Langua
 2. `provider.headers` (auth requests only)
 3. Per-request headers (highest priority)
 
-### Advanced: Custom Providers via Registry
+### Advanced: Custom Providers with workerFactory
 
-For complex auth flows, you can create custom providers and register them:
+For complex auth flows with custom parsers or strategies, use `workerFactory` to create a custom worker:
+
+**Step 1: Create custom worker file (my-worker.ts)**
 
 ```ts
-import { registerProvider, createClient, createProvider } from 'fetchguard'
+// my-worker.ts
+import { registerProvider, createProvider } from 'fetchguard'
 import { createIndexedDBStorage } from 'fetchguard'
-import { ok } from 'ts-micro-result'
 
-// Create custom provider
-const myProvider = createProvider({
+// Register custom provider INSIDE the worker
+registerProvider('my-custom-auth', createProvider({
   refreshStorage: createIndexedDBStorage('MyApp', 'refreshToken'),
   parser: {
     async parse(response: Response) {
       const data = await response.json()
+      // Custom response format
       return {
-        token: data.accessToken,
-        refreshToken: data.refreshToken,
-        expiresAt: data.expiresAt,
-        user: data.user
+        token: data.result.accessToken,
+        refreshToken: data.result.refreshToken,
+        expiresAt: data.result.exp * 1000,
+        user: data.result.profile
       }
     }
   },
   strategy: {
-    async refreshToken(refreshToken: string | null) {
-      const res = await fetch('https://api.example.com/auth/refresh', {
+    async refresh(refreshToken: string | null) {
+      return fetch('https://api.example.com/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken })
       })
-      return res
     },
     async login(payload: unknown) {
-      const res = await fetch('https://api.example.com/auth/login', {
+      return fetch('https://api.example.com/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
-      return res
     },
     async logout(payload?: unknown) {
-      const res = await fetch('https://api.example.com/auth/logout', {
+      return fetch('https://api.example.com/auth/logout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload || {})
       })
-      return res
+    },
+    async exchangeToken(accessToken: string, url: string, options?: { method?: string; payload?: unknown; headers?: Record<string, string> }) {
+      return fetch(url, {
+        method: options?.method || 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...options?.headers,
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: options?.payload ? JSON.stringify(options.payload) : undefined
+      })
     }
   }
-})
+}))
 
-// Register provider
-registerProvider('my-custom-auth', myProvider)
+// Re-export worker entry point (required!)
+export * from 'fetchguard/worker'
+```
 
-// Use registered provider
+**Step 2: Use workerFactory in main thread**
+
+```ts
+// main.ts
+import { createClient } from 'fetchguard'
+
 const api = createClient({
-  provider: 'my-custom-auth',  // Reference by name
+  provider: 'my-custom-auth',  // Reference registered provider by name
+  workerFactory: () => new Worker(
+    new URL('./my-worker.ts', import.meta.url),
+    { type: 'module' }
+  ),
   allowedDomains: ['api.example.com']
 })
 ```
+
+**Why workerFactory?**
+
+- Functions cannot be serialized via `postMessage` (causes `DataCloneError`)
+- `registerProvider` in main thread doesn't affect Worker (separate registries)
+- Custom worker file bundles your provider code into the Worker context
+- Full control over parser logic, strategy implementation, and storage
 
 
 ### Custom Auth Methods (Advanced)

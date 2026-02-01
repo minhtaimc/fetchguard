@@ -97,9 +97,15 @@ export class FetchGuardClient {
     this.debug = options.debug
     this.retry = options.retry
     this.dedupe = options.dedupe
-    this.worker = new Worker(new URL('./worker.js', import.meta.url), { 
-      type: 'module' 
-    })
+
+    // Use custom worker factory if provided, otherwise use built-in worker
+    if (options.workerFactory) {
+      this.worker = options.workerFactory()
+    } else {
+      this.worker = new Worker(new URL('./worker.js', import.meta.url), {
+        type: 'module'
+      })
+    }
 
     this.worker.onmessage = this.handleWorkerMessage.bind(this)
     this.worker.onerror = this.handleWorkerError.bind(this)
